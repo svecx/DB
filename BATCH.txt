@@ -1,0 +1,91 @@
+--LOGIN SAP LOGON
+USERNAME : 10009334
+PASSWORD : @Dira012023
+
+IT_OPR1_AOL = Jan2023
+IT_OPR = Jan2023
+
+\\10.81.3.205\IT_Operation  ---address BATCH
+
+Comment approval di Ticket:
+
+Dear Ibu/Bapak,
+Mohon dicoba kembali. Terimakasih
+
+Dear Tim EAD, 
+Mohon bantuannya kembali jenis dokumen masih kosong untuk PK 051022112190 ini terlampir capture. Terima Kasih
+
+Dear Tim EAD, 
+Mohon bantuan pengecekannya untuk no kontrak ini 030522114199 terlampir error saat melakukan scan BPKBLIB. Terimakasih
+
+Dear Ibu Thasya,
+Mohon dicoba kembali menggunakan NIK 10091960 dengan Password @Dira2022. Terimakasih
+
+
+B220000368048
+--CPU (SKIP)
+Dear Mas Erik Lala, 
+Mohon bantuan cabang ingin memunculkan kembali data yang belum diproses dan staging lebih dari 1 bulan pada tanggal 10-11-2022. Terimakasih
+
+--E-PKS
+Dear Tim SAP (Mba Hadi Ayu), 
+Mohon untuk pengecekannya kembali terlampir problem yang terjadi. Terimakasih
+
+--INSENTIVE
+Dear Bapak/Ibu, Mohon diinfokan untuk No PK atas WMP yang tidak muncul. Terimakasih
+
+[LOG]Dear Tim, 
+Mohon bantuan menjalankan Script terlampir pada batch 3 Folder AOL, DB 02-01-2024. Terima Kasih.
+
+[LOG]Dear Tim, 
+Mohon bantuan menjalankan Script terlampir pada batch 2 Folder INTRANET, DB 02-01-2024. Terima Kasih.
+
+[Execute]Dear Tim, 
+Mohon bantuan menjalankan Script terlampir pada batch 4 Folder INTRANET, DB 01-02-2024. Terima Kasih.
+
+Dear Ibu Cici, 
+Setelah dilakukan pengecekan atas PK tersebut merupakan top bidder menunggu 150 hari dari tanggal terakhir confirm RV.
+Hubungi Tim warehouse HO. Terimakasih 
+
+--TEMPLATE SELISIH REKON
+
+---subjek
+----Rekon Transaksi Vs AIT Vs SAP (Aman, HQ dan Quantum)
+---selisih AMAN tim AM, selisih HQ dan quantum tim HAD
+---Kalo selisih di aman fu ke kresno, kalo selisih hq fu ke mas andri
+Dear Tim AM dan Tim HAD,
+
+Mohon bantuan untuk pengecekan dan perbaikan atas selisih Rekon Transaksi Vs AIT Vs SAP(Aman,HQ dan Quantum)
+
+Selisih bulan Desember 2022.
+
+Terima kasih.
+
+
+--ganti batch dan tanggal saja
+
+
+JAM BATCH
+batch 1 : Run 09.30
+
+batch 2 : Run 11.30
+
+batch 3 : Run 14.30
+
+batch 4 : Run 16.00
+
+batch 5 : Run 17.30
+
+batch 6 : Run > 17.30
+
+
+
+Comment approval di Email:
+
+Dear All,
+
+
+akes user ad1forflow erik lala
+10080967
+@Dira0622
+wait dicek

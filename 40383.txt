@@ -1,0 +1,42 @@
+SELECT * FROM ad1cms.temp_colla_autoregis a
+where a.appl_contract_no = '023024110036';
+
+SELECT * FROM ad1cms.cola_detail_reg a
+where a.cola_id = 'B230000181476';
+
+SELECT * FROM ad1cms.cola_master_history a
+where a.cola_id = 'B230000181476';
+
+SELECT * FROM ad1cms.cola_Transact_header a
+where a.cola_memo_no = '02302401J0000000154';
+
+/*
+delete ad1cms.cola_master_history a
+where a.cola_memo_no = '02302401J0000000154'
+and a.cola_id = 'B230000181476';
+
+update ad1cms.cola_master_history a
+set a.cola_cont_no = '023023113825'
+where a.cola_id = 'B230000181476'
+and a.cola_cont_no = '023024110036';
+
+delete ad1cms.cola_detail_reg a
+where a.cola_cont_no = '023024110036'
+and a.cola_id = 'B230000181476';
+
+update ad1cms.cola_transact_header a
+set a.cola_confirmed = '2'
+where a.cola_memo_no = '02302401J0000000154';
+
+update ad1cms.temp_colla_autoregis a
+set a.status = '0',
+a.appl_cont_old = '023022120448',
+a.appl_date_add = trunc(sysdate)
+where a.appl_contract_no = '023024110036';
+
+update ad1cms.cola_detail_reg a
+set a.cola_addt_4 = '1'
+-- select * from ad1cms.cola_detail_reg a
+where a.cola_id = 'B230000181476'
+and a.cola_cont_no = '023023113825';
+*/
