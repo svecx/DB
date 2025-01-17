@@ -1,0 +1,67 @@
+declare
+  TGL1 DATE := TRUNC(SYSDATE) - 1;
+  TGL2 DATE := TRUNC(SYSDATE);
+
+BEGIN
+  BEGIN
+    --1 PV TRADE
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'PV TRADE' AS KODE_SCRIPT,
+             CASH_PV_PAID_DATE,
+             B.CASH_CLAS_CODE AS KODE_TRANSAKSI,
+             COUNT(CASH_PV_NO),
+             COUNT(AIT_DOC_NO_APP),
+             (COUNT(CASH_PV_NO) - COUNT(AIT_DOC_NO_APP)) AS SELISIH_JML_DATA,
+             SUM(CASH_DETAIL_AMT),
+             SUM(AIT_AMOUNT1),
+             (SUM(CASH_DETAIL_AMT) - SUM(AIT_AMOUNT1)) AS SELISIH_AMOUNT,
+             (CASE
+               WHEN (COUNT(CASH_PV_NO) - COUNT(AIT_DOC_NO_APP)) = 0 AND
+                    (SUM(CASH_DETAIL_AMT) - SUM(AIT_AMOUNT1)) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             AIT_CODE,
+             AIT_LINE_GT,
+             AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT CPH.CASH_PV_NO,
+                              CPH.CASH_PV_PAID_DATE,
+                              CPD.CASH_CLAS_CODE,
+                              NVL(CPD.CASH_DETAIL_AMT, 0) CASH_DETAIL_AMT,
+                              AIT.AIT_DOC_NO_APP,
+                              NVL(AIT.AIT_AMOUNT1, 0) AIT_AMOUNT1,
+                              AIT.AIT_CODE,
+                              AIT.AIT_LINE_GT,
+                              AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.CASH_PV_HEADER CPH
+               INNER JOIN AD1SYS.CASH_PV_DETAIL CPD
+                  ON CPH.CASH_BR_ID = CPD.CASH_BR_ID
+                 AND CPH.CASH_PV_NO = CPD.CASH_PV_NO
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                  ON CPH.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT
+                 AND CPD.CASH_CONT_NO = RPAD(AIT.AIT_ASSIGNTMENT, 13, ' ')
+                 AND AIT.AIT_CODE IN
+                     (SELECT A.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PVTF2') --'0003001' didomain
+               WHERE TRIM(CPD.CASH_CLAS_CODE) IN
+                     (SELECT A.LOW_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PVTF2')
+                    --'B-TITIP' --didomain
+                 AND CPH.CASH_PV_PAID_DATE >= TGL1 --'31-MAR-20' --nanti ganti TGL1 
+                 AND CPH.CASH_PV_PAID_DATE < TGL2 --'01-APR-20' -- nanti gantti TGL2 
+                 AND CPH.CASH_PV_STATUS = '1') B
+       GROUP BY B.CASH_PV_PAID_DATE, B.CASH_CLAS_CODE , B.AIT_CODE, B.AIT_LINE_GT, B.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT PV TRADE : ' || SQLERRM);
+  END;
+
+END;
+
+/
+SELECT* FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate -1);

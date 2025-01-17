@@ -1,0 +1,280 @@
+declare
+  TGL1       DATE := TRUNC(SYSDATE) - 1;
+  TGL2       DATE := TRUNC(SYSDATE);
+  SZAIT_CODE VARCHAR2(10);
+  MSG        VARCHAR2(1000);
+
+BEGIN
+  BEGIN
+  
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'PPD'
+       AND A.DOMAIN_VALUE = 'NEW BOOKING';
+  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'PPD' AS KODE_SCRIPT,
+             X.AIT_POSTING_DATE,
+             'NEW BOOKING' AS TYPE_PPD,
+             SUM(X.APPL_CONTRACT_NO),
+             SUM(X.AIT_DOC_NO_APP),
+             SUM(X.APPL_CONTRACT_NO) - SUM(X.AIT_DOC_NO_APP),
+             SUM(X.AMT_PPD),
+             SUM(X.AIT_AMOUNT1),
+             SUM(X.AMT_PPD) - SUM(X.AIT_AMOUNT1),
+             (CASE
+               WHEN (SUM(X.APPL_CONTRACT_NO) - SUM(X.AIT_DOC_NO_APP)) = 0 AND
+                    (SUM(X.AMT_PPD) - SUM(X.AIT_AMOUNT1)) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             X.AIT_CODE,
+             X.AIT_LINE_GT,
+             X.AIT_GROUP_TRANSACTION
+        FROM (SELECT AIT_POSTING_DATE,
+                     COUNT(CA.APPL_CONTRACT_NO) APPL_CONTRACT_NO,
+                     SUM(CA.APPL_OBJ_PRICE - NVL(CA.APPL_NET_DP, 0) + -- EDIT BY MUH 14-MEI-20
+                         NVL(CO.OBJT_ADM_FINANCING, 0) +
+                         NVL(APPL_AMT_SELL, 0) +
+                         NVL(CA.APPL_FIDUCIA_FINANCED, 0) +
+                         NVL(CA.APPL_PROVISI_FIN, 0) +
+                         NVL(OBJT_INSR_LIFE_FIN, 0) +
+                         NVL(CO.OBJT_INSR_FINANCING_2, 0) +
+                         NVL(CA.APPL_INTEREST_AMT, 0) +
+                         NVL((SELECT SUM(CAI.APPL_INSR_CREDIT_AMT)
+                               FROM AD1SYS.CRED_APPL_INSR CAI
+                              WHERE CAI.APPL_BR_ID = CA.APPL_BR_ID
+                                AND CAI.APPL_CONTRACT_NO =
+                                    CA.APPL_CONTRACT_NO),
+                             0)) AMT_PPD, -- END EDIT
+                     COUNT(AIT.AIT_DOC_NO_APP) AIT_DOC_NO_APP,
+                     SUM(AIT.AIT_AMOUNT1) AIT_AMOUNT1,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM CRED_APPL                    CA,
+                     CRED_APPL_DETAIL             CAD,
+                     CRED_OBJT                    CO,
+                     AD1SYS.ACCT_INTEGRATION_TRAN AIT
+              
+               WHERE AIT.AIT_POSTING_DATE >= TGL1
+                 AND AIT.AIT_POSTING_DATE < TGL2
+                 AND TRIM(CA.APPL_PPD_NO) = AIT.AIT_DOC_HEADER_TEXT
+                 AND CA.APPL_CONTRACT_NO = AIT.AIT_ASSIGNTMENT
+                 AND AIT.AIT_CODE = SZAIT_CODE
+                 AND AIT.AIT_LINE_GT = '1'
+                 AND CA.APPL_BR_ID = CAD.APPL_BR_ID
+                 AND CA.APPL_NO = CAD.APPL_NO
+                 AND CA.APPL_BR_ID = CO.OBJT_APPL_BR_ID
+                 AND CA.APPL_NO = CO.OBJT_APPL_NO
+                 AND NOT EXISTS
+               (SELECT 1
+                        FROM AD1SYS.AREC_CONT_RESCHD ACR
+                       WHERE ACR.AREC_BR_ID = CA.APPL_BR_ID
+                         AND ACR.AREC_CONT_NO = CA.APPL_CONTRACT_NO
+                         AND ACR.AREC_RESCHD_TYPE = 'H'
+                         AND ACR.SZSTATUS = '1')
+              
+               GROUP BY AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION
+              UNION
+              SELECT AIT_POSTING_DATE,
+                     COUNT(CA.APPL_CONTRACT_NO) APPL_CONTRACT_NO,
+                     SUM(CA.APPL_OBJ_PRICE - NVL(CA.APPL_NET_DP, 0) + -- EDIT BY MUH 14-MEI-20
+                         NVL(CO.OBJT_ADM_FINANCING, 0) +
+                         NVL(APPL_AMT_SELL, 0) +
+                         NVL(CA.APPL_FIDUCIA_FINANCED, 0) +
+                         NVL(CA.APPL_PROVISI_FIN, 0) +
+                         NVL(OBJT_INSR_LIFE_FIN, 0) +
+                         NVL(CO.OBJT_INSR_FINANCING_2, 0) +
+                          (SELECT NVL(ACMO.AREC_INTR,0)
+                          FROM AD1SYS.AREC_CONT_MAST_OLD ACMO
+                         WHERE ACMO.AREC_BR_ID = CA.APPL_BR_ID
+                        AND ACMO.AREC_CONT_NO = CA.APPL_CONTRACT_NO) +
+                         --NVL(CA.APPL_INTEREST_AMT, 0) +
+                         NVL((SELECT SUM(CAI.APPL_INSR_CREDIT_AMT)
+                               FROM AD1SYS.CRED_APPL_INSR CAI
+                              WHERE CAI.APPL_BR_ID = CA.APPL_BR_ID
+                                AND CAI.APPL_CONTRACT_NO =
+                                    CA.APPL_CONTRACT_NO),
+                             0)) AMT_PPD, -- END EDIT
+                     COUNT(AIT.AIT_DOC_NO_APP) AIT_DOC_NO_APP,
+                     SUM(AIT.AIT_AMOUNT1) AIT_AMOUNT1,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM CRED_APPL                    CA,
+                     CRED_APPL_DETAIL             CAD,
+                     CRED_OBJT                    CO,
+                     AD1SYS.ACCT_INTEGRATION_TRAN AIT,
+                     AD1SYS.AREC_CONT_RESCHD      ACR
+               WHERE AIT.AIT_POSTING_DATE >= TGL1
+                 AND AIT.AIT_POSTING_DATE < TGL2
+                 AND TRIM(CA.APPL_PPD_NO) = AIT.AIT_DOC_HEADER_TEXT
+                 AND CA.APPL_CONTRACT_NO = AIT.AIT_ASSIGNTMENT
+                 AND AIT.AIT_CODE = SZAIT_CODE
+                 AND AIT.AIT_LINE_GT = '1'
+                 AND CA.APPL_BR_ID = CAD.APPL_BR_ID
+                 AND CA.APPL_NO = CAD.APPL_NO
+                 AND CA.APPL_BR_ID = CO.OBJT_APPL_BR_ID
+                 AND CA.APPL_NO = CO.OBJT_APPL_NO
+                 AND ACR.AREC_BR_ID = CA.APPL_BR_ID
+                 AND ACR.AREC_CONT_NO = CA.APPL_CONTRACT_NO
+                 AND ACR.AREC_RESCHD_TYPE = 'H'
+                 AND ACR.SZSTATUS = '1'
+               GROUP BY AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION) X
+       GROUP BY X.AIT_CODE,
+                X.AIT_LINE_GT,
+                X.AIT_GROUP_TRANSACTION,
+                X.AIT_POSTING_DATE;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT NEW BOOKING : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'PPD'
+       AND A.DOMAIN_VALUE = 'CANCEL BOOKING';
+  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'PPD' AS KODE_SCRIPT,
+             X.AIT_POSTING_DATE,
+             'CANCEL BOOKING' TYPE_PPD,
+             SUM(X.APPL_CONTRACT_NO),
+             SUM(X.AIT_DOC_NO_APP),
+             SUM(X.APPL_CONTRACT_NO) - SUM(X.AIT_DOC_NO_APP),
+             SUM(X.AMT_PPD),
+             SUM(X.AIT_AMOUNT1),
+             SUM(X.AMT_PPD) - SUM(X.AIT_AMOUNT1),
+             (CASE
+               WHEN (SUM(X.APPL_CONTRACT_NO) - SUM(X.AIT_DOC_NO_APP)) = 0 AND
+                    (SUM(X.AMT_PPD) - SUM(X.AIT_AMOUNT1)) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             X.AIT_CODE,
+             X.AIT_LINE_GT,
+             X.AIT_GROUP_TRANSACTION
+        FROM (SELECT AIT_POSTING_DATE,
+                     COUNT(CA.APPL_CONTRACT_NO) APPL_CONTRACT_NO,
+                     SUM(CA.APPL_OBJ_PRICE - NVL(CA.APPL_NET_DP, 0) + -- edit by muh 14-mei-20
+                         NVL(CO.OBJT_ADM_FINANCING, 0) +
+                         NVL(APPL_AMT_SELL, 0) +
+                         NVL(CA.APPL_FIDUCIA_FINANCED, 0) +
+                         NVL(CA.APPL_PROVISI_FIN, 0) +
+                         NVL(OBJT_INSR_LIFE_FIN, 0) +
+                         NVL(CO.OBJT_INSR_FINANCING_2, 0) +
+                         NVL(CA.APPL_INTEREST_AMT, 0) +
+                         NVL((SELECT SUM(CAI.APPL_INSR_CREDIT_AMT)
+                               FROM AD1SYS.CRED_APPL_INSR CAI
+                              WHERE CAI.APPL_BR_ID = CA.APPL_BR_ID
+                                AND CAI.APPL_CONTRACT_NO =
+                                    CA.APPL_CONTRACT_NO),
+                             0)) AMT_PPD, -- end edit
+                     COUNT(AIT.AIT_DOC_NO_APP) AIT_DOC_NO_APP,
+                     SUM(AIT.AIT_AMOUNT1) AIT_AMOUNT1,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM CRED_APPL                    CA,
+                     CRED_APPL_DETAIL             CAD,
+                     CRED_OBJT                    CO,
+                     AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_POSTING_DATE >= TGL1
+                 AND AIT.AIT_POSTING_DATE < TGL2
+                 AND trim(CA.APPL_PPD_NO) = AIT.AIT_DOC_HEADER_TEXT
+                 AND CA.APPL_CONTRACT_NO = AIT.AIT_ASSIGNTMENT
+                 AND AIT.AIT_CODE = SZAIT_CODE
+                 AND AIT.AIT_LINE_GT = '1'
+                 AND CA.APPL_BR_ID = CAD.APPL_BR_ID
+                 AND CA.APPL_NO = CAD.APPL_NO
+                 AND CA.APPL_BR_ID = CO.OBJT_APPL_BR_ID
+                 AND CA.APPL_NO = CO.OBJT_APPL_NO
+                 AND NOT EXISTS
+               (SELECT 1
+                        FROM AD1SYS.AREC_CONT_RESCHD ACR
+                       WHERE ACR.AREC_BR_ID = CA.APPL_BR_ID
+                         AND ACR.AREC_CONT_NO = CA.APPL_CONTRACT_NO
+                         AND ACR.AREC_RESCHD_TYPE = 'H'
+                         AND ACR.SZSTATUS = '1')
+               GROUP BY AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION
+              UNION
+              SELECT AIT_POSTING_DATE,
+                     COUNT(CA.APPL_CONTRACT_NO) APPL_CONTRACT_NO,
+                     SUM(CA.APPL_OBJ_PRICE - NVL(CA.APPL_NET_DP, 0) + -- edit by muh 14-mei-20
+                         NVL(CO.OBJT_ADM_FINANCING, 0) +
+                         NVL(APPL_AMT_SELL, 0) +
+                         NVL(CA.APPL_FIDUCIA_FINANCED, 0) +
+                         NVL(CA.APPL_PROVISI_FIN, 0) +
+                         NVL(OBJT_INSR_LIFE_FIN, 0) +
+                         NVL(CO.OBJT_INSR_FINANCING_2, 0) +
+                        (SELECT NVL(ACMO.AREC_INTR,0)
+                          FROM AD1SYS.AREC_CONT_MAST_OLD ACMO
+                         WHERE ACMO.AREC_BR_ID = CA.APPL_BR_ID
+                        AND ACMO.AREC_CONT_NO = CA.APPL_CONTRACT_NO) +
+                         --NVL(CA.APPL_INTEREST_AMT, 0) +
+                         NVL((SELECT SUM(CAI.APPL_INSR_CREDIT_AMT)
+                               FROM AD1SYS.CRED_APPL_INSR CAI
+                              WHERE CAI.APPL_BR_ID = CA.APPL_BR_ID
+                                AND CAI.APPL_CONTRACT_NO =
+                                    CA.APPL_CONTRACT_NO),
+                             0)) AMT_PPD, -- end edit
+                     COUNT(AIT.AIT_DOC_NO_APP) AIT_DOC_NO_APP,
+                     SUM(AIT.AIT_AMOUNT1) AIT_AMOUNT1,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM CRED_APPL                    CA,
+                     CRED_APPL_DETAIL             CAD,
+                     CRED_OBJT                    CO,
+                     AD1SYS.ACCT_INTEGRATION_TRAN AIT,
+                     AD1SYS.AREC_CONT_RESCHD      ACR
+               WHERE AIT.AIT_POSTING_DATE >= TGL1
+                 AND AIT.AIT_POSTING_DATE < TGL2
+                 AND trim(CA.APPL_PPD_NO) = AIT.AIT_DOC_HEADER_TEXT
+                 AND CA.APPL_CONTRACT_NO = AIT.AIT_ASSIGNTMENT
+                 AND AIT.AIT_CODE = SZAIT_CODE
+                 AND AIT.AIT_LINE_GT = '1'
+                 AND CA.APPL_BR_ID = CAD.APPL_BR_ID
+                 AND CA.APPL_NO = CAD.APPL_NO
+                 AND CA.APPL_BR_ID = CO.OBJT_APPL_BR_ID
+                 AND CA.APPL_NO = CO.OBJT_APPL_NO
+                 AND ACR.AREC_BR_ID = CA.APPL_BR_ID
+                 AND ACR.AREC_CONT_NO = CA.APPL_CONTRACT_NO
+                 AND ACR.AREC_RESCHD_TYPE = 'H'
+                 AND ACR.SZSTATUS = '1'
+               GROUP BY AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION) X
+       GROUP BY X.AIT_CODE,
+                X.AIT_LINE_GT,
+                X.AIT_GROUP_TRANSACTION,
+                X.AIT_POSTING_DATE;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT CANCEL BOOKING : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+END;
+
+/
+SELECT* FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate -1);

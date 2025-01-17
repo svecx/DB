@@ -1,0 +1,667 @@
+declare
+  TGL1         DATE := TRUNC(SYSDATE) - 1;
+  TGL2         DATE := TRUNC(SYSDATE);
+  SZAKTIF_TAC2 NUMBER;
+  --CUT_TAC2     NUMBER; --add by kresno --remark by kresno 122040/X/22
+  AITKOM2    VARCHAR2(10); --add by kresno 117116/X/22
+  AITKOM2NEW VARCHAR2(10); --add by kresno 117116/X/22
+
+BEGIN
+  BEGIN
+    SELECT B.LOW_VALUE
+      INTO SZAKTIF_TAC2
+      FROM AD1SYS.PARA_DOMAIN_HEAD A, AD1SYS.PARA_DOMAIN_DTL B
+     where A.DOMAIN_ID = 'REKON'
+       and A.STATUS = 'Y'
+       and B.DOMAIN_VALUE = 'KOMISI_TAC2';
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000', SQLERRM);
+  END;
+  --Add By Kresno 114188/X/22
+  /*BEGIN --remark by kresno 122040/X/22
+    SELECT B.LOW_VALUE
+      INTO CUT_TAC2
+      FROM AD1SYS.PARA_DOMAIN_HEAD A, AD1SYS.PARA_DOMAIN_DTL B
+     where A.DOMAIN_ID = 'REKON'
+       and A.STATUS = 'Y'
+       and B.DOMAIN_VALUE = 'CUT_TAC2';
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000', SQLERRM);
+  END;*/ --end remark
+  --End Add By Kresno 114188/X/22
+  --Add By Kresno MTC 117116/X/22
+  BEGIN
+    SELECT PDT.HIGH_VALUE
+      INTO AITKOM2
+      FROM AD1SYS.PARA_DOMAIN_DTL PDT
+     WHERE PDT.DOMAIN_ID = 'KOMRE'
+       AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+       AND PDT.LOW_VALUE IN ('AITKOM2');
+  END;
+
+  BEGIN
+    SELECT PDT.HIGH_VALUE
+      INTO AITKOM2NEW
+      FROM AD1SYS.PARA_DOMAIN_DTL PDT
+     WHERE PDT.DOMAIN_ID = 'KOMRE'
+       AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+       AND PDT.LOW_VALUE IN ('AITKOM2NEW');
+  END;
+  --End Add By Kresno 117116/X/22
+  BEGIN
+    --1 Komisi Dealer Motor Mobil
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+    --ini untukk kondisi cancel
+      SELECT (SELECT DISTINCT AC.JENIS_TRANSAKSI
+                FROM AD1SYS.ACCT_MAPPING_CODE AC
+               WHERE AC.AIT_CODE = Y.AIT_CODE) AS KODE_SCRIPT, --'FPD KOMISI MOTOR & MOBIL' AS KODE_SCRIPT
+             X.INSF_FPD_DATE,
+             'KOMISI DEALER' AS KODE_TRANSAKSI,
+             X.INSF_PAID_DOC_NO,
+             Y.AIT_DOC_NO_APP,
+             X.INSF_PAID_DOC_NO - Y.AIT_DOC_NO_APP,
+             X.INSF_PAID_AMT,
+             Y.AIT_AMOUNT1,
+             X.INSF_PAID_AMT - Y.AIT_AMOUNT1,
+             (CASE
+               WHEN (X.INSF_PAID_DOC_NO - Y.AIT_DOC_NO_APP) = 0 AND
+                    (X.INSF_PAID_AMT - Y.AIT_AMOUNT1) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             Y.AIT_CODE,
+             Y.AIT_LINE_GT,
+             Y.AIT_GROUP_TRANSACTION
+        FROM (SELECT COUNT(CIM.INSF_PAID_DOC_NO) AS INSF_PAID_DOC_NO,
+                     SUM(ABS(CIM.INSF_PAID_AMT)) AS INSF_PAID_AMT,
+                     CIM.INSF_FPD_DATE
+                FROM CRED_INSENTIF_MOBIL CIM, AD1SYS.CRED_APPL CA --
+               WHERE CIM.INSF_PAID_DATE >= TGL1 --MOD BY KRESNO
+                 AND CIM.INSF_PAID_DATE < TGL2 --MOD BY KRESNO
+                 AND CIM.INSF_STATUS = '3'
+                 AND CIM.INSF_STATUS_CANCEL = '1'
+                 AND CIM.INSF_BR_ID = CA.APPL_BR_ID --
+                 AND CIM.INSF_CONTRACT_NO = CA.APPL_CONTRACT_NO --
+                    --AND CA.APPL_PPD_DATE > add_months(sysdate, - CUT_TAC2) --mod by kresno 114188/X/22 --remark by kresno 20oct22 122040/X/22
+                    --ADD SAPROL EXCLUDE TAC2 
+                 AND 1 = (CASE
+                       WHEN CIM.INSF_FLAG_BAYAR = '2' AND 1 = SZAKTIF_TAC2 THEN
+                        0
+                       ELSE
+                        1
+                     END)
+               GROUP BY CIM.INSF_FPD_DATE) X
+        FULL OUTER JOIN (SELECT COUNT(AIT.AIT_DOC_NO_APP) AS AIT_DOC_NO_APP,
+                                SUM(AIT.AIT_AMOUNT1) AS AIT_AMOUNT1,
+                                TRUNC(AIT.AIT_POSTING_DATE) /*TRUNC(AIT.AIT_SYSDATE)*/ AS AIT_SYSDATE,
+                                AIT.AIT_CODE,
+                                AIT.AIT_LINE_GT,
+                                AIT.AIT_GROUP_TRANSACTION
+                           FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          WHERE AIT.AIT_POSTING_DATE >= TGL1
+                            AND AIT.AIT_POSTING_DATE < TGL2
+                            AND AIT.AIT_CODE IN /*('0002002')*/ --Mod by Iqwal
+                                (SELECT PDT.HIGH_VALUE
+                                   FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                  WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                    AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                    AND PDT.LOW_VALUE = 'AITKOM1')
+                            AND AIT.AIT_LINE_GT = '1'
+                          GROUP BY TRUNC(AIT.AIT_POSTING_DATE) /*TRUNC(AIT.AIT_SYSDATE)*/,
+                                   AIT.AIT_CODE,
+                                   AIT.AIT_LINE_GT,
+                                   AIT.AIT_GROUP_TRANSACTION) Y
+          ON TRUNC(X.INSF_FPD_DATE) = TRUNC(Y.AIT_SYSDATE)
+      UNION ALL
+      --MOD BY KRESNO MTC 117116/X/22
+      --ini untuk kondisi aktif
+      SELECT (SELECT DISTINCT AC.JENIS_TRANSAKSI
+                FROM AD1SYS.ACCT_MAPPING_CODE AC
+               WHERE AC.AIT_CODE = Y.AIT_CODE) AS KODE_SCRIPT,
+             /* 'FPD KOMISI MOTOR & MOBIL' AS */
+             X.INSF_FPD_DATE,
+             'KOMISI DEALER' AS KODE_TRANSAKSI,
+             X.INSF_PAID_DOC_NO,
+             Y.AIT_DOC_NO_APP,
+             X.INSF_PAID_DOC_NO - Y.AIT_DOC_NO_APP,
+             X.INSF_PAID_AMT,
+             Y.AIT_AMOUNT1,
+             X.INSF_PAID_AMT - Y.AIT_AMOUNT1,
+             (CASE
+               WHEN (X.INSF_PAID_DOC_NO - Y.AIT_DOC_NO_APP) = 0 AND
+                    (X.INSF_PAID_AMT - Y.AIT_AMOUNT1) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             Y.AIT_CODE,
+             Y.AIT_LINE_GT,
+             Y.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(AJK.INSF_PAID_DOC_NO) AS INSF_PAID_DOC_NO, --add by kresno mtc penambahan union table cred_insentif_pembayaran
+                     SUM(AJK.INSF_PAID_AMT) AS INSF_PAID_AMT,
+                     AJK.INSF_FPD_DATE AS INSF_FPD_DATE,
+                     AJK.INSF_FLAG_BAYAR AS INSF_FLAG_BAYAR,
+                     (CASE --Add By Kresno 117116/X/22
+                       WHEN AJK.INSF_FLAG_BAYAR = 1 then
+                        AITKOM2
+                       else
+                        AITKOM2NEW
+                     END) AIT_CODE --End Add By Kresno 117116/X/22
+                FROM (SELECT (CASE
+                               WHEN CIM.INSF_FLAG_BAYAR = '1' THEN --01
+                                COUNT(CIM.INSF_PAID_DOC_NO)
+                               ELSE --37
+                                COUNT(CIM.INSF_PAID_DOC_NO)
+                             END) INSF_PAID_DOC_NO,
+                             (CASE
+                               WHEN CIM.INSF_FLAG_BAYAR = '1' THEN
+                                SUM(ABS(CIM.INSF_PAID_AMT))
+                               ELSE
+                                SUM(ABS(CIM.INSF_PAID_AMT))
+                             END) INSF_PAID_AMT, --MOD BY IQWAL
+                             CIM.INSF_FPD_DATE,
+                             CIM.INSF_FLAG_BAYAR --
+                        FROM CRED_INSENTIF_MOBIL CIM
+                       WHERE CIM.INSF_PAID_DATE >= TGL1
+                         AND CIM.INSF_PAID_DATE < TGL2
+                         AND CIM.INSF_STATUS IN
+                             (SELECT PDT.LOW_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL  PDT,
+                                     AD1SYS.PARA_DOMAIN_HEAD PDH
+                               WHERE PDT.DOMAIN_ID = PDH.DOMAIN_ID
+                                 AND PDH.DOMAIN_ID = 'STRKN'
+                                 AND PDH.STATUS = 'Y'
+                                 AND PDT.DOMAIN_VALUE = 'CIM_ISC'
+                                 AND PDT.LOW_VALUE = '3') --DOMAIN STATUS
+                         AND CIM.INSF_STATUS_CANCEL = '0'
+                      --AND CIM.INSF_FLAG_BAYAR = '2' -- remark BY KRESNO MTC
+                       GROUP BY CIM.INSF_FPD_DATE, CIM.INSF_FLAG_BAYAR
+                      UNION
+                      SELECT COUNT(CIP.CRED_NO_FPD) INSF_PAID_DOC_NO,
+                             SUM(CIP.CRED_AMOUNT_GROSS) INSF_PAID_AMT,
+                             CIP.CRED_APPR_DATE INSF_FPD_DATE,
+                             '2' AS FLAG_BAYAR
+                        FROM AD1SYS.CRED_INSENTIF_PEMBAYARAN CIP
+                       WHERE CIP.CRED_NO_FPD IS NOT NULL
+                            --AND CIP.CRED_DOC_NO_APP IS NOT NULL
+                         AND CIP.CRED_STATUS_PEMBAYARAN = '2'
+                         AND CIP.CRED_APPR_DATE >= TGL1
+                         AND CIP.CRED_APPR_DATE < TGL2
+                         and cip.cred_deleted = '0'
+                         and cip.cred_tax_flag in
+                             (SELECT PDT.LOW_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL  PDT,
+                                     AD1SYS.PARA_DOMAIN_HEAD PDH
+                               WHERE PDT.DOMAIN_ID = PDH.DOMAIN_ID
+                                 AND PDH.DOMAIN_ID = 'STRKN'
+                                 AND PDH.STATUS = 'Y'
+                                 AND PDT.DOMAIN_VALUE = 'CIP_CTF'
+                                 AND PDT.LOW_VALUE = 'V1') --domain tax flag
+                       GROUP BY CIp.CRED_APPR_DATE) AJK --end add by kresno
+               GROUP BY AJK.INSF_FPD_DATE, AJK.INSF_FLAG_BAYAR
+              
+              ) X
+        FULL OUTER JOIN (SELECT (CASE
+                                  WHEN AIT.AIT_CODE =
+                                       (SELECT PDT.HIGH_VALUE
+                                          FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                         WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                           AND PDT.DOMAIN_VALUE =
+                                               'KOMISI REKON'
+                                           AND PDT.LOW_VALUE = 'AITKOM2') THEN --01
+                                   COUNT(AIT.AIT_DOC_NO_APP)
+                                  ELSE --37
+                                   COUNT(AIT.AIT_DOC_NO_APP)
+                                END) AIT_DOC_NO_APP,
+                                (CASE
+                                  WHEN AIT.AIT_CODE =
+                                       (SELECT PDT.HIGH_VALUE
+                                          FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                         WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                           AND PDT.DOMAIN_VALUE =
+                                               'KOMISI REKON'
+                                           AND PDT.LOW_VALUE = 'AITKOM2') THEN
+                                   SUM(AIT.AIT_AMOUNT1)
+                                  ELSE
+                                   SUM(AIT.AIT_AMOUNT1)
+                                END) AS AIT_AMOUNT1,
+                                TRUNC(AIT.AIT_POSTING_DATE) /*TRUNC(AIT.AIT_SYSDATE)*/ AS AIT_SYSDATE,
+                                AIT.AIT_CODE,
+                                AIT.AIT_LINE_GT,
+                                AIT.AIT_GROUP_TRANSACTION
+                           FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          WHERE AIT.AIT_POSTING_DATE >= TGL1
+                            AND AIT.AIT_POSTING_DATE < TGL2
+                            AND AIT.AIT_CODE IN /*('0002001', '0002037')*/ --Mod by Iqwal
+                                (SELECT PDT.HIGH_VALUE
+                                   FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                  WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                    AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                    AND PDT.LOW_VALUE IN
+                                        ('AITKOM2', 'AITKOM2NEW'))
+                            AND AIT.AIT_LINE_GT = '1'
+                          GROUP BY TRUNC(AIT.AIT_POSTING_DATE) /*TRUNC(AIT.AIT_SYSDATE)*/,
+                                   AIT.AIT_CODE,
+                                   AIT.AIT_LINE_GT,
+                                   AIT.AIT_GROUP_TRANSACTION) Y
+          ON TRUNC(X.INSF_FPD_DATE) = TRUNC(Y.AIT_SYSDATE)
+         AND X.AIT_CODE = Y.AIT_CODE;
+    --END MOD BY KRESNO
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT FPD INSENTIF MOTOR & MOBIL : ' ||
+                              SQLERRM);
+  END;
+
+  BEGIN
+    --2 KOMISI FIDUSIA  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT (SELECT DISTINCT AC.JENIS_TRANSAKSI
+                FROM AD1SYS.ACCT_MAPPING_CODE AC
+               WHERE AC.AIT_CODE = X.AIT_CODE) /*'FPD FIDUSIA'*/ AS KODE_SCRIPT,
+             X.AIT_POSTING_DATE,
+             'KOMISI FIDUSIA',
+             X.COUNT_TABLE_TRANS,
+             X.COUNT_AIT,
+             X.COUNT_TABLE_TRANS - X.COUNT_AIT,
+             - (X.SUM_FPD_TRANS),
+             X.AMOUNT_AIT,
+             X.AMOUNT_AIT + X.SUM_FPD_TRANS,
+             (CASE
+               WHEN (X.COUNT_TABLE_TRANS - X.COUNT_AIT) = 0 AND
+                    (-X.SUM_FPD_TRANS - X.AMOUNT_AIT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             X.AIT_CODE,
+             X.AIT_LINE_GT,
+             X.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(Z.AMOUNT) AS AMOUNT_AIT,
+                     (CASE
+                       WHEN Z.AIT_CODE = /*'0018005'*/
+                            ad1sys.func_cek_in_para_domain('KOMRE',
+                                                           'KOMISI REKON',
+                                                           'AITKOM4',
+                                                           4) THEN --AIT CODE Lama
+                        (SELECT SUM(D.NILBIAYA_JASA)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA < 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE < '21-JUN-22')
+                       ELSE --0018018
+                        (SELECT SUM(D.NILBIAYA_JASA)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA < 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE >= '21-JUN-22')
+                     END) AS SUM_FPD_TRANS,
+                     Z.AIT_POSTING_DATE,
+                     (CASE
+                       WHEN Z.AIT_CODE = /*'0018005'*/
+                            ad1sys.func_cek_in_para_domain('KOMRE',
+                                                           'KOMISI REKON',
+                                                           'AITKOM4',
+                                                           4) THEN --AIT CODE Lama
+                        (SELECT COUNT(1)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA < 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE < '21-JUN-22'
+                          GROUP BY TRUNC(TANGGAL_BAYAR))
+                       ELSE
+                        (SELECT COUNT(1)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA < 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE >= '21-JUN-22'
+                          GROUP BY TRUNC(TANGGAL_BAYAR))
+                     END) AS COUNT_TABLE_TRANS,
+                     COUNT(1) AS COUNT_AIT,
+                     Z.AIT_CODE,
+                     Z.AIT_LINE_GT,
+                     Z.AIT_GROUP_TRANSACTION
+                FROM (SELECT CASE
+                               WHEN AIT.AIT_CODE IN /*('0018006', '0018016')*/
+                                    (SELECT PDT.HIGH_VALUE
+                                       FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                      WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                        AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                        AND PDT.LOW_VALUE IN
+                                            ('AITKOM3', 'AITKOM3N')) THEN
+                                (AIT.AIT_AMOUNT1)
+                               WHEN AIT.AIT_CODE IN /*('0018005', '0018018')*/
+                                    (SELECT PDT.HIGH_VALUE
+                                       FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                      WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                        AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                        AND PDT.LOW_VALUE IN
+                                            ('AITKOM4', 'AITKOM4N')) THEN
+                                (AIT.AIT_AMOUNT1)
+                             END AS AMOUNT,
+                             AIT.AIT_DOC_HEADER_TEXT,
+                             AIT.AIT_VENDOR_NO,
+                             AIT.AIT_POSTING_DATE,
+                             AIT.AIT_CODE,
+                             AIT.AIT_LINE_GT,
+                             AIT.AIT_GROUP_TRANSACTION
+                        FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                       WHERE AIT.AIT_CODE IN /*('0018005', '0018018')*/
+                             (SELECT PDT.HIGH_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                               WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                 AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                 AND PDT.LOW_VALUE IN ('AITKOM4', 'AITKOM4N'))
+                         AND TRUNC(AIT.AIT_SYSDATE) >= TGL1 --'01-apr-20'
+                         AND TRUNC(AIT.AIT_SYSDATE) < TGl2 --'02-apr-20'
+                         AND AIT.AIT_LINE_GT = '1') Z
+               GROUP BY Z.AIT_POSTING_DATE,
+                        Z.AIT_CODE,
+                        Z.AIT_LINE_GT,
+                        Z.AIT_DOC_HEADER_TEXT,
+                        Z.AIT_GROUP_TRANSACTION) X
+      UNION ALL
+      SELECT (SELECT DISTINCT AC.JENIS_TRANSAKSI
+                FROM AD1SYS.ACCT_MAPPING_CODE AC
+               WHERE AC.AIT_CODE = X.AIT_CODE) /*'FPD FIDUSIA'*/ AS KODE_SCRIPT,
+             X.AIT_POSTING_DATE,
+             'KOMISI FIDUSIA',
+             X.COUNT_TABLE_TRANS,
+             X.COUNT_AIT,
+             X.COUNT_TABLE_TRANS - X.COUNT_AIT,
+             X.SUM_FPD_TRANS,
+             X.AMOUNT_AIT,
+             X.SUM_FPD_TRANS - X.AMOUNT_AIT,
+             (CASE
+               WHEN (X.COUNT_TABLE_TRANS - X.COUNT_AIT) = 0 AND
+                    (X.SUM_FPD_TRANS - X.AMOUNT_AIT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             X.AIT_CODE,
+             X.AIT_LINE_GT,
+             X.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(Z.AMOUNT) AS AMOUNT_AIT,
+                     (CASE
+                       WHEN Z.AIT_CODE = /*'0018006'*/
+                            ad1sys.func_cek_in_para_domain('KOMRE',
+                                                           'KOMISI REKON',
+                                                           'AITKOM3',
+                                                           4) THEN --AIT CODE Lama
+                        (SELECT SUM(D.NILBIAYA_JASA)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA > 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE < '21-JUN-22')
+                       ELSE --0018016
+                        (SELECT SUM(D.NILBIAYA_JASA)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                               
+                            AND D.NILBIAYA_JASA > 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE >= '21-JUN-22')
+                     END) AS SUM_FPD_TRANS,
+                     Z.AIT_POSTING_DATE,
+                     (CASE
+                       WHEN Z.AIT_CODE = /*'0018006'*/
+                            ad1sys.func_cek_in_para_domain('KOMRE',
+                                                           'KOMISI REKON',
+                                                           'AITKOM3',
+                                                           4) THEN --AIT CODE Lama
+                        (SELECT COUNT(1)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                               
+                            AND D.NILBIAYA_JASA > 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE < '21-JUN-22'
+                          GROUP BY TRUNC(TANGGAL_BAYAR))
+                       ELSE
+                        (SELECT COUNT(1)
+                           FROM AD1SYS.CONT_FPD_FIDUSIA D, AD1SYS.CRED_APPL CA
+                          WHERE TRUNC(TANGGAL_BAYAR) =
+                                TRUNC(Z.AIT_POSTING_DATE)
+                            AND D.NO_FPD = Z.AIT_DOC_HEADER_TEXT
+                            AND D.NILBIAYA_JASA > 0
+                            AND D.BRID = CA.APPL_BR_ID
+                            AND D.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                            AND CA.APPL_PPD_DATE >= '21-JUN-22'
+                          GROUP BY TRUNC(TANGGAL_BAYAR))
+                     END) AS COUNT_TABLE_TRANS,
+                     COUNT(1) AS COUNT_AIT,
+                     Z.AIT_CODE,
+                     Z.AIT_LINE_GT,
+                     Z.AIT_GROUP_TRANSACTION
+                FROM (SELECT AIT.AIT_AMOUNT1 AS AMOUNT,
+                             AIT.AIT_DOC_HEADER_TEXT,
+                             AIT.AIT_VENDOR_NO,
+                             AIT.AIT_POSTING_DATE,
+                             AIT.AIT_CODE,
+                             AIT.AIT_LINE_GT,
+                             AIT.AIT_GROUP_TRANSACTION
+                        FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                       WHERE AIT.AIT_CODE IN /*('0018006', '0018016')*/
+                             (SELECT PDT.HIGH_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                               WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                 AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                 AND PDT.LOW_VALUE IN ('AITKOM3', 'AITKOM3N'))
+                         AND TRUNC(AIT.AIT_SYSDATE) >= TGL1
+                         AND TRUNC(AIT.AIT_SYSDATE) < TGL2
+                         AND AIT.AIT_LINE_GT = '1') Z
+               GROUP BY Z.AIT_POSTING_DATE,
+                        Z.AIT_CODE,
+                        Z.AIT_LINE_GT,
+                        Z.AIT_GROUP_TRANSACTION,
+                        z.AIT_DOC_HEADER_TEXT) X;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT FPD FIDUSIA : ' || SQLERRM);
+  END;
+
+  BEGIN
+    --3 KOMISI KEDAY
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT (SELECT DISTINCT AC.JENIS_TRANSAKSI
+                FROM AD1SYS.ACCT_MAPPING_CODE AC
+               WHERE AC.AIT_CODE IN
+                     (SELECT A.LOW_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'INKDY')) AS KODE_SCRIPT /*'FPD KEDAY'*/,
+             X.AIT_POSTING_DATE,
+             'KOMISI KEDAY' AS KODE_TRANSAKSI,
+             --remark satria 6-juli-20
+             /*X.ASCOUNT_KDY -
+             (SELECT COUNT(1)
+                FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+               WHERE IM.FLAG_INSF = '03'
+                 AND IM.FPD_DATE = X.AIT_POSTING_DATE) COUNT_KDY,*/
+             -- end remark
+             --add satria 6-juli-20
+             CASE
+               WHEN (X.ASCOUNT_KDY -
+                    (SELECT COUNT(1)
+                        FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+                       WHERE IM.FLAG_INSF = '03'
+                         AND IM.FPD_DATE = X.AIT_POSTING_DATE)) <>
+                    X.COUNT_AIT THEN
+                X.COUNT_AIT
+               ELSE
+                (X.ASCOUNT_KDY -
+                (SELECT COUNT(1)
+                    FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+                   WHERE IM.FLAG_INSF = '03'
+                     AND IM.FPD_DATE = X.AIT_POSTING_DATE))
+             END COUNT_KDY,
+             --end add
+             X.COUNT_AIT,
+             --remark satria 6-juli-20
+             /*X.ASCOUNT_KDY - X.COUNT_AIT -
+             (SELECT COUNT(1)
+                FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+               WHERE IM.FLAG_INSF = '03'
+                 AND IM.FPD_DATE = X.AIT_POSTING_DATE),*/
+             --end remark
+             --add satria 6-juli-20    
+             CASE
+               WHEN (X.ASCOUNT_KDY - X.COUNT_AIT -
+                    (SELECT COUNT(1)
+                        FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+                       WHERE IM.FLAG_INSF = '03'
+                         AND IM.FPD_DATE = X.AIT_POSTING_DATE)) <> 0 THEN
+                (X.COUNT_AIT - X.COUNT_AIT)
+               ELSE
+                (X.ASCOUNT_KDY - X.COUNT_AIT -
+                (SELECT COUNT(1)
+                    FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+                   WHERE IM.FLAG_INSF = '03'
+                     AND IM.FPD_DATE = X.AIT_POSTING_DATE))
+             END,
+             --end add
+             X.AMOUNT_KDY,
+             X.AMOUNT_AIT,
+             X.AMOUNT_KDY - X.AMOUNT_AIT,
+             --mod by satria 06-jul-20
+             (CASE
+               WHEN (X.ASCOUNT_KDY - X.COUNT_AIT -
+                    (SELECT COUNT(1)
+                        FROM AD1SYS.INSENTIF_MASTER_KEDAY IM
+                       WHERE IM.FLAG_INSF = '03'
+                         AND IM.FPD_DATE = X.AIT_POSTING_DATE)) <> 0 AND
+                    (X.AMOUNT_KDY - X.AMOUNT_AIT) = 0 THEN
+                'OKE'
+               WHEN (X.COUNT_AIT - X.COUNT_AIT) = 0 AND
+                    (X.AMOUNT_KDY - X.AMOUNT_AIT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             --end mod
+             --  X.AIT_CODE, 
+             (SELECT MAX(ACT.AIT_CODE)
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN ACT
+               WHERE ACT.AIT_POSTING_DATE = X.AIT_POSTING_DATE
+                 AND ACT.AIT_CODE IN /*('0002003',
+                                                                                                                                                                                                                                                                                                                                                                                          '0002004',
+                                                                                                                                                                                                                                                                                                                                                                                          '0002005',
+                                                                                                                                                                                                                                                                                                                                                                                          '0002006',
+                                                                                                                                                                                                                                                                                                                                                                                          '0002007',
+                                                                                                                                                                                                                                                                                                                                                                                          '0002008')*/ --Mod By Iqwal
+                     (SELECT PDT.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                       WHERE PDT.DOMAIN_ID = 'KOMRE'
+                         AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                         AND PDT.LOW_VALUE = 'AITKOM5')) AIT_CODE,
+             X.AIT_LINE_GT,
+             X.AIT_GROUP_TRANSACTION
+      
+        FROM (SELECT SUM(AMOUNT) AS AMOUNT_AIT,
+                     AIT_POSTING_DATE,
+                     (SELECT SUM(D.AMOUNT)
+                        FROM (SELECT CASE
+                                       WHEN A.FLAG_INSF IN ('01', '02') THEN
+                                        A.AMOUNT_INSF
+                                       WHEN A.FLAG_INSF IN ('04', '05') THEN
+                                        (A.AMOUNT_INSF)
+                                       WHEN A.FLAG_INSF IN ('03') THEN --get ammpunt penalty
+                                        - (A.AMOUNT_INSF)
+                                     END AS AMOUNT,
+                                     FPD_DATE
+                                FROM AD1SYS.INSENTIF_MASTER_KEDAY A) D
+                       WHERE D.FPD_DATE = AIT_POSTING_DATE) AS AMOUNT_KDY,
+                     (SELECT COUNT(1)
+                        FROM (SELECT CASE
+                                       WHEN A.FLAG_INSF IN ('01', '02') THEN
+                                        A.AMOUNT_INSF
+                                       WHEN A.FLAG_INSF IN ('04', '05') THEN
+                                        (A.AMOUNT_INSF)
+                                     END AS AMOUNT,
+                                     FPD_DATE
+                                FROM AD1SYS.INSENTIF_MASTER_KEDAY A) D
+                       WHERE D.FPD_DATE = AIT_POSTING_DATE) ASCOUNT_KDY,
+                     COUNT(1) AS COUNT_AIT,
+                     --   Z.AIT_CODE,
+                     Z.AIT_LINE_GT,
+                     Z.AIT_GROUP_TRANSACTION
+              
+                FROM (SELECT CASE
+                               WHEN AIT.AIT_CODE IN
+                                   /*('0002003', '0002005', '0002007')*/ --Mod By Iqwal
+                                    (SELECT PDT.HIGH_VALUE
+                                       FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                      WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                        AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                        AND PDT.LOW_VALUE = 'AITKOM5A') THEN
+                                AIT.AIT_AMOUNT1
+                               WHEN AIT.AIT_CODE IN
+                                   /*('0002004', '0002006', '0002008')*/ --Mod By Iqwal
+                                    (SELECT PDT.HIGH_VALUE
+                                       FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                                      WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                        AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                        AND PDT.LOW_VALUE = 'AITKOM5B') THEN
+                                (AIT.AIT_AMOUNT1)
+                             END AS AMOUNT,
+                             AIT.AIT_POSTING_DATE,
+                             AIT.AIT_CODE,
+                             AIT.AIT_LINE_GT,
+                             AIT.AIT_GROUP_TRANSACTION
+                        FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                       WHERE AIT.AIT_CODE IN
+                             (SELECT PDT.HIGH_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL PDT
+                               WHERE PDT.DOMAIN_ID = 'KOMRE'
+                                 AND PDT.DOMAIN_VALUE = 'KOMISI REKON'
+                                 AND PDT.LOW_VALUE = 'AITKOM5')
+                         AND AIT.AIT_LINE_GT = '1') Z
+               GROUP BY AIT_POSTING_DATE,
+                        -- Z.AIT_CODE,
+                        Z.AIT_LINE_GT,
+                        Z.AIT_GROUP_TRANSACTION) X
+       WHERE X.AIT_POSTING_DATE >= TGL1
+         AND X.AIT_POSTING_DATE < TGL2;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT FPD KEDAY : ' || SQLERRM);
+  END;
+
+END;
+
+/
+SELECT * FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate - 1)
+and a.kode_script like '%komisi%';

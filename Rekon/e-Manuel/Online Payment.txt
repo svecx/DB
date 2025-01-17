@@ -1,0 +1,436 @@
+declare
+  TGL1       DATE := TRUNC(SYSDATE) - 1;
+  SZAIT_CODE VARCHAR2(10);
+  MSG        VARCHAR2(1000);
+
+  --V25 adjust preterm online
+  --V26 adjust transaksi ESPAY
+  --V27 adjust transaksi GOJEK
+  --V28 adjust parameterize untuk domain ca code dan ait code
+  --V29 adjust parameterize untuk domain ca code dan ait code
+  --V30 perubahan cabang transaksi ke cabang customer table AREC_TRF_TERM
+  --V31 perubahan cabang transaksi ke cabang customer table AREC_COLL_PRETERM_VA
+  --V32 penambahan untuk transaksi renewal
+  --V33 penambahan untuk transaksi renewal - domain notop row9 dan tgl proses cabang
+  --V34 penambahan untuk transaksi renewal - pemisahan nomain notop row9 dan row10 utk ca code dan ait code
+
+BEGIN
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'OP'
+       AND A.DOMAIN_VALUE = 'ONLINE PAYMENT';
+  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+    --remark proses lama 11-aug-20
+    /*SELECT X.JENIS_TRANSAKSI,
+         X.TANGGAL_PROSES_CABANG AS TRANSACTION_DATE,
+         X.CA_CODE AS CODE,
+         X.JUMLAH_DATA_ACA AS JML_DATA_TRX,
+         X.JUMLAH_DATA_AIT AS JML_DATA_AIT,
+         X.JUMLAH_DATA_ACA - X.JUMLAH_DATA_AIT AS SELISIH_JML_DATA,
+         X.SUM_AMOUNT_ACA AS SUM_TRANSAKSI,
+         X.SUM_AMOUNT_AIT AS SUM_AIT,
+         X.SUM_AMOUNT_ACA - X.SUM_AMOUNT_AIT AS SELISIH_AMOUNT,
+         (CASE
+           WHEN (X.JUMLAH_DATA_ACA - X.JUMLAH_DATA_AIT) = 0 AND
+                (X.SUM_AMOUNT_ACA - X.SUM_AMOUNT_AIT) = 0 THEN
+            'OKE'
+           ELSE
+            'SELISIH'
+         END) AS STATUS,
+         X.AIT_CODE,
+         X.LINE_ITEM,
+         X.GROUP_CODE
+    FROM (SELECT TRUNC(ACA.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                 \*CASE
+                   WHEN ACA.CA_CODE = '000009' THEN
+                    '000009-BNI'
+                   WHEN ACA.CA_CODE = '000011' THEN
+                    '000011-DANAMON'
+                   WHEN ACA.CA_CODE = '000014' THEN
+                    '000014-BCA'
+                   WHEN ACA.CA_CODE = '000700' THEN
+                    '000700-PT. POS'
+                   WHEN ACA.CA_CODE = '000770' THEN
+                    '000770-FINNET'
+                   WHEN ACA.CA_CODE = '011000' THEN
+                    '011000-VA CUSTOMER BDI'
+                   WHEN ACA.CA_CODE = '200710' THEN
+                    '200710-Payment Point Online Banking'
+                   WHEN ACA.CA_CODE = '660101' THEN
+                    '660101-ADIRAKU'
+                   WHEN ACA.CA_CODE = '888888' THEN
+                    '888888-AutoDebet'
+                 END*\
+                 AM.CLASS_CODE CA_CODE,
+    
+                 COUNT(1) JUMLAH_DATA_ACA,
+                 COUNT((SELECT 1
+                         FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                        WHERE AIT.AIT_GROUP_TRANSACTION = SZAIT_CODE
+                          AND AIT.AIT_LINE_GT = '1'
+                          AND AIT.AIT_ASSIGNTMENT = TRIM(ACA.NO_KONTRAK)
+                          AND AIT.AIT_COST_CENTER = ACA.SZBRANCHID
+                          AND AIT.AIT_DOC_HEADER_TEXT =
+                              TRIM(ACA.NO_REF) ||
+                              TRIM(ACA.NO_TANDA_PENGESAHAN)
+                        GROUP BY AIT.AIT_DOC_HEADER_TEXT)) JUMLAH_DATA_AIT,
+                 CASE
+                   WHEN ACA.CA_CODE IN ('200710',
+                                        '000009',
+                                        '000770',
+                                        '000700',
+                                        '000011',
+                                        '000014') THEN
+                    SUM(ACA.NILAI_PEMBAYARAN) + SUM(ACA.ADMIN_ADMF) \*+
+                                       SUM(ACA.SWITCHER_FEE) + SUM(ACA.CA_FEE)*\ --MOD CR FEE PAYMENT
+                   WHEN ACA.CA_CODE IN ('888888', '660101', '011000') THEN
+                    SUM(ACA.NILAI_PEMBAYARAN)
+                 \*                 WHEN ACA.CA_CODE IN ('000014') THEN
+                 SUM(ACA.NILAI_PEMBAYARAN) + SUM(ACA.ADMIN_ADMF)*\
+                 END AS SUM_AMOUNT_ACA,
+                 SUM((SELECT AIT.AIT_AMOUNT1
+                       FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                      WHERE AIT.AIT_CODE IN ('0005001',
+                                             '0005002',
+                                             '0005003',
+                                             '0005004',
+                                             '0005005',
+                                             '0005007')
+                        AND AIT.AIT_LINE_GT = '1'
+                        AND AIT.AIT_COST_CENTER = ACA.SZBRANCHID
+                        AND AIT.AIT_DOC_HEADER_TEXT =
+                            TRIM(ACA.NO_REF) ||
+                            TRIM(ACA.NO_TANDA_PENGESAHAN)
+                        AND AIT.AIT_ASSIGNTMENT = TRUNC(ACA.NO_KONTRAK)
+                      GROUP BY AIT.AIT_DOC_HEADER_TEXT, AIT.AIT_AMOUNT1)) SUM_AMOUNT_AIT,
+                 AM.AIT_CODE,
+                 AM.LINE_ITEM,
+                 AM.GROUP_CODE,
+                 AM.JENIS_TRANSAKSI
+            FROM AD1SYS.AREC_COLL_AGENTS  ACA,
+                 AD1SYS.ACCT_MAPPING_CODE AM
+           WHERE TRUNC(ACA.TANGGAL_PROSES_CABANG) = TGL1
+             AND ACA.NILAI_PEMBAYARAN > 0
+             AND TRIM(ACA.CA_CODE) = TRIM(SUBSTR(AM.CLASS_CODE, 1, 6))
+             AND ACA.STATUS_PROSES_CABANG = '1'
+           GROUP BY ACA.CA_CODE,
+                    TRUNC(ACA.TANGGAL_PROSES_CABANG),
+                    AM.CLASS_CODE, -- add by satria
+                    AM.AIT_CODE,
+                    AM.LINE_ITEM,
+                    AM.GROUP_CODE,
+                    AM.JENIS_TRANSAKSI ) X;*/
+    --end remark
+      SELECT AAA.JENIS_TRANSAKSI,
+             AAA.TANGGAL_PROSES_CABANG,
+             AAA.CLASS_CODE,
+             AAA.JUMLAH_TRX,
+             AAA.JUMLAH_DATA_AIT,
+             AAA.SELISIH_JUMLAH,
+             AAA.AMOUNT,
+             AAA.AIT_AMOUNT1,
+             AAA.SELISIH_SUM,
+             (CASE
+               WHEN NVL(AAA.SELISIH_SUM, '0') <> '0' THEN
+                'SELISIH'
+               ELSE
+                'OKE'
+             END) STATUS,
+             AAA.AIT_CODE,
+             AAA.LINE_ITEM,
+             AAA.GROUP_CODE
+        FROM (SELECT CC.JENIS_TRANSAKSI,
+                     BB.TANGGAL_PROSES_CABANG,
+                     CC.CLASS_CODE,
+                     BB.JUMLAH_TRX,
+                     BB.JUMLAH_DATA_AIT,
+                     (BB.JUMLAH_TRX - BB.JUMLAH_DATA_AIT) SELISIH_JUMLAH,
+                     BB.AMOUNT,
+                     BB.AIT_AMOUNT1,
+                     (BB.AMOUNT - BB.AIT_AMOUNT1) SELISIH_SUM,
+                     CC.AIT_CODE,
+                     CC.LINE_ITEM,
+                     CC.GROUP_CODE
+                FROM (SELECT SUM(CASE
+                                   WHEN XX.AMOUNT = AIT.AIT_AMOUNT1 THEN
+                                    XX.AMOUNT
+                                   ELSE
+                                   -- (XX.NILAI_PEMBAYARAN + XX.ADMIN_JURN) --mod satria 30-sep-20
+                                    AIT.AIT_AMOUNT1
+                                 END) AMOUNT,
+                             XX.CA_CODE,
+                             XX.TANGGAL_PROSES_CABANG,
+                             SUM(AIT.AIT_AMOUNT1) AIT_AMOUNT1,
+                             COUNT(XX.DOC_HEADER) AS JUMLAH_TRX,
+                             --    COUNT(AIT.AIT_DOC_HEADER_TEXT) AS JUMLAH_AIT
+                             COUNT((SELECT 1
+                                     FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                                    WHERE AIT.AIT_GROUP_TRANSACTION =
+                                          SZAIT_CODE
+                                      AND AIT.AIT_LINE_GT = '1'
+                                      AND AIT.AIT_ASSIGNTMENT =
+                                          TRIM(XX.NO_KONTRAK)
+                                      AND AIT.AIT_COST_CENTER = XX.SZBRANCHID
+                                      AND AIT.AIT_DOC_HEADER_TEXT =
+                                          DOC_HEADER
+                                    GROUP BY AIT.AIT_DOC_HEADER_TEXT)) JUMLAH_DATA_AIT
+                        FROM (SELECT A.NO_KONTRAK,
+                                     A.SZBRANCHID,
+                                     (TRIM(A.NO_REF) ||
+                                     TRIM(A.NO_TANDA_PENGESAHAN)) DOC_HEADER,
+                                     A.NILAI_PEMBAYARAN,
+                                     A.CA_CODE,
+                                     TRUNC(A.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                                     ((A.NILAI_PEMBAYARAN) + (A.ADMIN_ADMF)) AMOUNT,
+                                     (SELECT FE.PC_ADMF_FEE
+                                        FROM AD1SYS.PARA_COLL_AGENT_ADM_FEE_NEW FE
+                                       WHERE FE.PC_CA_CODE = TRIM(A.CA_CODE)
+                                         AND FE.PC_MERCHANT_ID =
+                                             TRIM(NVL(A.MERCHANT_ID, '0'))
+                                         AND FE.PC_OBJECT_CODE =
+                                             CA.APPL_OBJT_CODE
+                                         AND FE.PC_FIN_TYPE = CA.APPL_FIN_TYPE
+                                         AND TRUNC(A.UPDATED_DATE) >=
+                                             FE.PC_AFFECTIVE_DATE
+                                         AND ROWNUM = '1') AS ADMIN_JURN
+                                FROM AD1SYS.AREC_COLL_AGENTS A,
+                                     AD1SYS.CRED_APPL        CA
+                               WHERE TRUNC(A.TANGGAL_PROSES_CABANG) = TGL1
+                                 AND A.SZBRANCHID = CA.APPL_BR_ID
+                                 AND A.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                                 AND A.NILAI_PEMBAYARAN > 0
+                                    /*AND A.CA_CODE IN ('200710',
+                                    '000009',
+                                    '000770',
+                                    '000700',
+                                    '000011',
+                                    '000014',
+                                    '014000', -- Add ca_code 014000 10may21
+                                    '880100', -- Add ca_code 880100 03Nov21
+                                    '000759') -- Add ca_code 000759 19Nov21 */
+                                 AND TRIM(A.CA_CODE) IN
+                                     (SELECT PDX.LOW_VALUE
+                                        FROM PARA_DOMAIN_DTL PDX
+                                       WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                         AND PDX.DOMAIN_VALUE = 'ROW1') --V.28
+                                 AND A.STATUS_PROSES_CABANG = '1') XX
+                        LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          ON TRIM(XX.NO_KONTRAK) = TRIM(AIT.AIT_ASSIGNTMENT)
+                         AND XX.DOC_HEADER = AIT.AIT_DOC_HEADER_TEXT
+                         AND AIT.AIT_LINE_GT = '1'
+                         AND AIT.AIT_GROUP_TRANSACTION = SZAIT_CODE
+                            /*AND AIT.AIT_CODE IN ('0005001',
+                            '0005002',
+                            '0005003',
+                            '0005004',
+                            '0005005',
+                            '0005007')*/
+                         AND TRIM(AIT.AIT_CODE) IN
+                             (SELECT PDX.LOW_VALUE
+                                FROM PARA_DOMAIN_DTL PDX
+                               WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                 AND PDX.DOMAIN_VALUE = 'ROW2') --V.28
+                       GROUP BY XX.CA_CODE, XX.TANGGAL_PROSES_CABANG
+                      UNION
+                      SELECT SUM(XX.NILAI_PEMBAYARAN),
+                             XX.CA_CODE,
+                             XX.TANGGAL_PROSES_CABANG,
+                             SUM(AIT.AIT_AMOUNT1),
+                             COUNT(XX.DOC_HEADER) AS JUMLAH_TRX,
+                             COUNT(AIT.AIT_DOC_HEADER_TEXT) AS JUMLAH_AIT
+                        FROM (SELECT A.NO_KONTRAK,
+                                     (TRIM(A.NO_REF) ||
+                                     TRIM(A.NO_TANDA_PENGESAHAN)) DOC_HEADER,
+                                     A.NILAI_PEMBAYARAN,
+                                     A.CA_CODE,
+                                     TRUNC(A.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                                     ((A.NILAI_PEMBAYARAN) + (A.ADMIN_ADMF)) AMOUNT
+                                FROM AD1SYS.AREC_COLL_AGENTS A,
+                                     AD1SYS.CRED_APPL        CA
+                               WHERE TRUNC(A.TANGGAL_PROSES_CABANG) = TGL1
+                                 AND A.SZBRANCHID = CA.APPL_BR_ID
+                                 AND A.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                                 AND A.NILAI_PEMBAYARAN > 0
+                                    /*AND A.CA_CODE IN
+                                    ('888888', \* '660101',*\ '011000')*/
+                                 AND TRIM(A.CA_CODE) IN
+                                     (SELECT PDX.LOW_VALUE
+                                        FROM PARA_DOMAIN_DTL PDX
+                                       WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                         AND PDX.DOMAIN_VALUE = 'ROW3') --V.28
+                                 AND A.STATUS_PROSES_CABANG = '1') XX
+                        LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          ON TRIM(XX.NO_KONTRAK) = TRIM(AIT.AIT_ASSIGNTMENT)
+                         AND XX.DOC_HEADER = AIT.AIT_DOC_HEADER_TEXT
+                         AND AIT.AIT_LINE_GT = '1'
+                         AND AIT.AIT_GROUP_TRANSACTION = SZAIT_CODE
+                            /*AND AIT.AIT_CODE IN ('0005001',
+                            '0005002',
+                            '0005003',
+                            '0005004',
+                            \*'0005005',*\ -- REMARK BY MUH
+                            '0005007')*/
+                         AND TRIM(AIT.AIT_CODE) IN
+                             (SELECT PDX.LOW_VALUE
+                                FROM PARA_DOMAIN_DTL PDX
+                               WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                 AND PDX.DOMAIN_VALUE = 'ROW4') --V.28
+                       GROUP BY XX.CA_CODE, XX.TANGGAL_PROSES_CABANG
+                      UNION -- add by muh
+                      SELECT SUM(XX.NILAI_PEMBAYARAN),
+                             XX.CA_CODE,
+                             XX.TANGGAL_PROSES_CABANG,
+                             SUM(AIT.AIT_AMOUNT1),
+                             COUNT(XX.DOC_HEADER) AS JUMLAH_TRX,
+                             COUNT(AIT.AIT_DOC_HEADER_TEXT) AS JUMLAH_AIT
+                        FROM (SELECT A.NO_KONTRAK,
+                                     (TRIM(A.NO_REF) ||
+                                     TRIM(A.NO_TANDA_PENGESAHAN)) DOC_HEADER,
+                                     A.NILAI_PEMBAYARAN,
+                                     A.CA_CODE,
+                                     TRUNC(A.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                                     ((A.NILAI_PEMBAYARAN) + (A.ADMIN_ADMF)) AMOUNT
+                                FROM AD1SYS.AREC_COLL_AGENTS A,
+                                     AD1SYS.CRED_APPL        CA
+                               WHERE TRUNC(A.TANGGAL_PROSES_CABANG) = TGL1
+                                 AND A.SZBRANCHID = CA.APPL_BR_ID
+                                 AND A.NO_KONTRAK = CA.APPL_CONTRACT_NO
+                                 AND A.NILAI_PEMBAYARAN > 0
+                                    --AND A.CA_CODE = '660101'
+                                 AND TRIM(A.CA_CODE) IN
+                                     (SELECT PDX.LOW_VALUE
+                                        FROM PARA_DOMAIN_DTL PDX
+                                       WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                         AND PDX.DOMAIN_VALUE = 'ROW5') --V.28
+                                 AND A.STATUS_PROSES_CABANG = '1') XX
+                        LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          ON XX.DOC_HEADER = AIT.AIT_DOC_HEADER_TEXT
+                         AND AIT.AIT_LINE_GT = '1'
+                         AND AIT.AIT_GROUP_TRANSACTION = SZAIT_CODE
+                            --AND AIT.AIT_CODE = '0005005'
+                         AND TRIM(AIT.AIT_CODE) IN
+                             (SELECT PDX.LOW_VALUE
+                                FROM PARA_DOMAIN_DTL PDX
+                               WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                 AND PDX.DOMAIN_VALUE = 'ROW6') --V.28
+                       GROUP BY XX.CA_CODE, XX.TANGGAL_PROSES_CABANG
+                      --Add v.32 By Kresno
+                      UNION
+                      SELECT SUM(XX.NILAI_PEMBAYARAN),
+                             XX.CA_CODE,
+                             XX.TANGGAL_PROSES_CABANG,
+                             SUM(AIT.AIT_AMOUNT1),
+                             COUNT(XX.DOC_HEADER) AS JUMLAH_TRX,
+                             COUNT(AIT.AIT_DOC_HEADER_TEXT) AS JUMLAH_AIT
+                        FROM (SELECT a.cred_cont_no NO_KONTRAK,
+                                     (TRIM(B.NO_REF) ||
+                                     TRIM(B.NO_TANDA_PENGESAHAN)) DOC_HEADER,
+                                     B.NILAI_PEMBAYARAN,
+                                     B.CA_CODE,
+                                     TRUNC(B.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                                     ((B.NILAI_PEMBAYARAN) + (B.ADMIN_ADMF)) AMOUNT
+                                FROM AD1SYS.CRED_POTENSIAL_RENEWAL A,
+                                     AD1SYS.AREC_COLL_AGENTS_ALL   B
+                               WHERE TRUNC(B.TANGGAL_PROSES_CABANG) = TGL1 --V.34
+                                 AND A.CRED_KODE_BAYAR = B.NO_KONTRAK
+                                 AND TRIM(B.CA_CODE) IN
+                                     ( /*'011000'*/
+                                      SELECT PDX.LOW_VALUE
+                                        FROM PARA_DOMAIN_DTL PDX
+                                       WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                         AND PDX.DOMAIN_VALUE = 'ROW9') --V.33
+                                 AND B.STATUS_PROSES_CABANG = '1') XX
+                        LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                          ON TRIM(XX.NO_KONTRAK) = TRIM(AIT.AIT_ASSIGNTMENT)
+                         AND XX.DOC_HEADER = AIT.AIT_DOC_HEADER_TEXT
+                         AND AIT.AIT_LINE_GT = '1'
+                         AND TRIM(AIT.AIT_CODE) IN
+                             ( /*'0005004'*/
+                              SELECT PDX.LOW_VALUE
+                                FROM PARA_DOMAIN_DTL PDX
+                               WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                 AND PDX.DOMAIN_VALUE = 'ROW10'/*'ROW9'*/) --V.34
+                       GROUP BY XX.CA_CODE, XX.TANGGAL_PROSES_CABANG
+                      --End Add v.32 By Kresno
+                      UNION
+                      SELECT SUM(CASE
+                                   WHEN XX.CA_CODE = '014000' THEN
+                                    XX.NILAI_PEMBAYARAN
+                                   ELSE
+                                    XX.AMOUNT
+                                 END) AMOUNT, --adjust nilai pembayaran Ari 29-oct-21
+                             XX.CA_CODE,
+                             XX.TANGGAL_PROSES_CABANG,
+                             SUM(AIT.AIT_AMOUNT1),
+                             COUNT(XX.DOC_HEADER) AS JUMLAH_TRX,
+                             COUNT(AIT.AIT_DOC_HEADER_TEXT) AS JUMLAH_AIT
+                        FROM (SELECT A.KONTRAK,
+                                     (TRIM(B.AREC_MEMO_NO) ||
+                                     TRIM(A.NO_PENGESAHAN)) DOC_HEADER,
+                                     A.NILAI_PEMBAYARAN,
+                                     A.CA_CODE,
+                                     TRUNC(A.TANGGAL_PROSES_CABANG) TANGGAL_PROSES_CABANG,
+                                     ((A.NILAI_PEMBAYARAN) + (A.ADMIN_ADMF)) AMOUNT
+                                FROM AD1SYS.AREC_COLL_PRETERM_VA A,
+                                     AD1SYS.CRED_APPL            CA,
+                                     AD1SYS.AREC_TRF_TERM        B,
+                                     AD1SYS.AREC_CONT_PRETERM    C
+                               WHERE TRUNC(A.TANGGAL_PROSES_CABANG) = TGL1
+                                    --AND A.SZBRANCHID = CA.APPL_BR_ID
+                                 AND A.KONTRAK = CA.APPL_CONTRACT_NO
+                                 AND A.BRID_BOOK = B.AREC_BR_CUST --B.AREC_BR_ID --EDITED BY ARI 220422
+                                 AND A.KONTRAK = B.AREC_CONTRACT_NO
+                                    --AND A.NILAI_PEMBAYARAN = (B.AREC_AMOUNT + nvl(a.total_fee,'0')) -- edit muh
+                                 AND A.BRID_BOOK = C.AREC_BR_ID --EDIT ARI
+                                 AND A.KONTRAK = C.AREC_CONT_NO
+                                 AND A.NO_REFF = TRIM(C.AREC_RECV_NO)
+                                    --AND B.AREC_BR_ID = C.AREC_BR_ID --EDIT ARI
+                                 AND B.AREC_CONTRACT_NO = C.AREC_CONT_NO
+                                 AND B.AREC_MEMO_NO = TRIM(C.AREC_MEMO_NO)
+                                 AND C.AREC_REC_STATUS = '1'
+                                 AND A.NILAI_PEMBAYARAN > 0
+                                 AND B.AREC_STATUS = '1'
+                                    /*AND A.CA_CODE IN ('888888', \* '660101',*\
+                                    '011000',
+                                    '014000',
+                                    '000011')*/
+                                 AND TRIM(A.CA_CODE) IN
+                                     (SELECT PDX.LOW_VALUE
+                                        FROM PARA_DOMAIN_DTL PDX
+                                       WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                         AND PDX.DOMAIN_VALUE = 'ROW7') --V.28
+                                 AND A.STATUS_PROSES_CABANG = '1') XX
+                      /*LEFT*/
+                        JOIN AD1SYS.ACCT_INTEGRATION_TRAN AIT -- remark by muh
+                          ON TRIM(XX.KONTRAK) = TRIM(AIT.AIT_ASSIGNTMENT)
+                         AND XX.DOC_HEADER = AIT.AIT_DOC_HEADER_TEXT
+                         AND AIT.AIT_LINE_GT = '1'
+                         AND AIT.AIT_GROUP_TRANSACTION = SZAIT_CODE
+                            /*AND AIT.AIT_CODE IN ('0005001',
+                            '0005002',
+                            '0005003',
+                            '0005004',
+                            '0005005',
+                            '0005007')*/
+                         AND TRIM(AIT.AIT_CODE) IN
+                             (SELECT PDX.LOW_VALUE
+                                FROM PARA_DOMAIN_DTL PDX
+                               WHERE PDX.DOMAIN_ID = 'NOTOP'
+                                 AND PDX.DOMAIN_VALUE = 'ROW8') --V.28
+                       GROUP BY XX.CA_CODE, XX.TANGGAL_PROSES_CABANG) BB, --add preterm online
+                     AD1SYS.ACCT_MAPPING_CODE CC
+               WHERE TRIM(BB.CA_CODE) = TRIM(SUBSTR(CC.CLASS_CODE, 1, 6))
+                 AND CC.JENIS_TRANSAKSI = 'Online Payment') AAA;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT ONLINE PAYMENT : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+END;
+/
+SELECT* FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate - 1);

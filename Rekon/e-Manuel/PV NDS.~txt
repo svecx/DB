@@ -1,0 +1,450 @@
+DECLARE
+  TGL1 DATE := TRUNC(SYSDATE) - 1;
+  TGL2 DATE := TRUNC(SYSDATE);
+BEGIN
+  BEGIN
+    --1 PV NDS
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+    -----AIT BY PV
+      SELECT 'PV NDS' AS KODE_SCRIPT,
+             XX.AIT_POSTING_DATE,
+             XY.NOTES, --8Mei20
+             XY.PV_DETAIL,
+             XX.AIT_BY_PV,
+             XY.PV_DETAIL - XX.AIT_BY_PV SELISIH_JUMLAH,
+             XX.AMOUNT,
+             XY.AMOUNT,
+             XX.AMOUNT - XY.AMOUNT AS SELISIH_AMOUNT,
+             (CASE
+               WHEN (XY.PV_DETAIL - XX.AIT_BY_PV) = 0 AND
+                    (XX.AMOUNT - XY.AMOUNT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             XX.AIT_CODE,
+             XX.AIT_LINE_GT,
+             XX.AIT_GROUP_TRANSACTION
+        FROM (SELECT COUNT(AIT.AIT_DOC_HEADER_TEXT) AIT_BY_PV,
+                     SUM(AIT.AIT_AMOUNT1) AMOUNT,
+                     AIT.AIT_POSTING_DATE,
+                     'NDS(NORMAL)' NOTES,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_CODE IN
+                     (SELECT A.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PVNDS'
+                         AND A.DOMAIN_VALUE IS NULL)
+                 AND EXISTS (SELECT 1
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL A
+                       WHERE A.CASH_BRANCH_ID =
+                        LEFT(AIT.AIT_DOC_NO_APP, 4) AND A.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT AND A.CASH_STATUS = '1' AND A.CASH_PV_DATE >= TGL1 AND A.CASH_PV_DATE < TGL2)
+                 AND AIT.AIT_DC_TYPE = '+'
+              --AND AIT.AIT_POSTING_DATE >= '01-FEB-20'
+              --AND AIT.AIT_POSTING_DATE <= '29-FEB-20'
+               GROUP BY AIT.AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION
+              UNION
+              SELECT COUNT(AIT.AIT_DOC_HEADER_TEXT) AIT_BY_PV,
+                     SUM(AIT.AIT_AMOUNT1) AMOUNT,
+                     AIT.AIT_POSTING_DATE,
+                     'NDS(NORMAL) OTHERS' NOTES,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_CODE IN
+                     (SELECT A.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PONDS'
+                         AND A.LOW_VALUE = 'AIT_CODE'
+                         AND A.DOMAIN_VALUE = 'OTHERS')
+                 AND EXISTS (SELECT 1
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL A
+                       WHERE A.CASH_BRANCH_ID =
+                        LEFT(AIT.AIT_DOC_NO_APP, 4) AND A.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT AND A.CASH_STATUS = '1' AND A.CASH_PV_DATE >= TGL1 AND A.CASH_PV_DATE < TGL2)
+                 AND AIT.AIT_DC_TYPE = '+'
+              --AND AIT.AIT_POSTING_DATE >= '01-FEB-20'
+              --AND AIT.AIT_POSTING_DATE <= '29-FEB-20'
+               GROUP BY AIT.AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION
+              UNION
+              SELECT COUNT(AIT.AIT_DOC_HEADER_TEXT) AIT_BY_PV,
+                     SUM(AIT.AIT_AMOUNT1) AMOUNT,
+                     AIT.AIT_POSTING_DATE,
+                     'NDS(NETT OFF 0)',
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_CODE IN
+                     (SELECT A.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PVNDS'
+                         AND A.DOMAIN_VALUE IS NULL)
+                 AND EXISTS (
+                      
+                      SELECT 1
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL A
+                       WHERE A.CASH_BRANCH_ID =
+                        LEFT(AIT.AIT_DOC_NO_APP, 4) AND A.CASH_CONTRACT_NO = AIT.AIT_ASSIGNTMENT AND A.CASH_AMT_PENCAIRAN = 0 AND A.CASH_STATUS = '2')
+                 AND AIT.AIT_DC_TYPE = '+'
+                 AND AIT.AIT_POSTING_DATE >= TGL1 --'01-APR-20'
+                 AND AIT.AIT_POSTING_DATE < TGL2 --'02-APR-20'
+               GROUP BY AIT.AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION) XX,
+             
+             ----PV DTL
+             (SELECT SUM(T.PV) PV_DETAIL,
+                     SUM(T.AMOUNT) AMOUNT,
+                     T.CASH_PV_DATE,
+                     T.NOTES
+                FROM (SELECT COUNT(A.CASH_PV_NO) PV,
+                             SUM(A.CASH_AMT_PENCAIRAN_OLD) AMOUNT,
+                             A.CASH_PV_DATE,
+                             'NDS(TIDAK ADA JURNAL AIT)' NOTES
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL A
+                       WHERE A.CASH_PV_NO IS NOT NULL
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_PV_DATE >= TGL1 --'01-APR-20'
+                         AND A.CASH_PV_DATE < TGL2 --'02-APR-20'
+                            
+                         AND NOT EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                               WHERE AIT.AIT_ASSIGNTMENT = A.CASH_CONTRACT_NO
+                                 AND AIT.AIT_CODE IN
+                                     (SELECT A.HIGH_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PVNDS'
+                                         AND A.DOMAIN_VALUE IS NULL)
+                              --AND AIT.AIT_POSTING_DATE >= '01-FEB-20'
+                              --AND AIT.AIT_POSTING_DATE <= '29-FEB-20'
+                              /*AND AIT.AIT_DC_TYPE = '+'*/
+                              )
+                       GROUP BY A.CASH_PV_DATE, A.CASH_AMT_PENCAIRAN_OLD
+                      UNION ALL
+                      SELECT COUNT(A.CASH_PV_NO),
+                             
+                             SUM(A.CASH_AMT_PENCAIRAN_OLD) AMOUNT,
+                             A.CASH_PV_DATE,
+                             'NDS(NORMAL)'
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL A
+                       WHERE A.CASH_PV_NO IS NOT NULL
+                         AND A.CASH_PV_DATE >= TGL1 --'01-APR-20'
+                         AND A.CASH_PV_DATE < TGL2 --'02-APR-20'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_REC_TUNAI in
+                             (SELECT A.HIGH_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL A
+                               WHERE A.DOMAIN_ID = 'PVNDS'
+                                 AND A.LOW_VALUE = 'REC_TUNAI'
+                                 AND A.DOMAIN_VALUE = 'NASABAH')
+                         AND EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                               WHERE AIT.AIT_ASSIGNTMENT = A.CASH_CONTRACT_NO
+                                 AND AIT.AIT_CODE IN
+                                     (SELECT A.HIGH_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PVNDS'
+                                         AND A.DOMAIN_VALUE IS NULL))
+                      
+                       GROUP BY A.CASH_PV_DATE, A.CASH_AMT_PENCAIRAN_OLD
+                      UNION ALL
+                      SELECT COUNT(CPV.CASH_PV_NO),
+                             
+                             SUM(CPV.CASH_AMT_PENCAIRAN_OLD) AMOUNT,
+                             CPV.CASH_PV_DATE,
+                             'NDS(NORMAL) OTHERS'
+                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL CPV
+                       WHERE CPV.CASH_PV_NO IS NOT NULL
+                         AND CPV.CASH_PV_DATE >= TGL1 --'01-APR-20'
+                         AND CPV.CASH_PV_DATE < TGL2 --'02-APR-20'
+                         AND CPV.CASH_STATUS = '1'
+                         AND CPV.CASH_REC_TUNAI in
+                             (SELECT A.HIGH_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL A
+                               WHERE A.DOMAIN_ID = 'PONDS'
+                                 AND A.LOW_VALUE = 'REC_TUNAI'
+                                 AND A.DOMAIN_VALUE = 'OTHERS')
+                         AND EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                               WHERE AIT.AIT_ASSIGNTMENT =
+                                     CPV.CASH_CONTRACT_NO
+                                 AND AIT.AIT_CODE IN
+                                     (SELECT A.HIGH_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PONDS'
+                                         AND A.LOW_VALUE = 'AIT_CODE'
+                                         AND A.DOMAIN_VALUE = 'OTHERS'))
+                      
+                       GROUP BY CPV.CASH_PV_DATE, CPV.CASH_AMT_PENCAIRAN_OLD
+                      UNION ALL
+                      SELECT COUNT(NET.ACCT_CONTRACT_NO),
+                             SUM(NET.AMOUNT),
+                             NET.ACCT_PV_DATE,
+                             'NDS(NETT OFF 0)'
+                        FROM (SELECT B.ACCT_CONTRACT_NO,
+                                     SUM(B.ACCT_AMT_INPUT) AMOUNT,
+                                     TRUNC(B.ACCT_CONF_DATE) ACCT_PV_DATE
+                                FROM AD1SYS.ACCT_FLAG_PEMBAYARAN B
+                               WHERE B.ACCT_AMOUNT = 0
+                                 AND B.ACCT_JENIS_RECIPIENT IN
+                                     (SELECT A.DOMAIN_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PVNDS'
+                                         AND A.LOW_VALUE =
+                                             'ACCT_JENIS_RECIPIENT')
+                                    
+                                    --('PELUNASAN PRETERM', 'NASABAH')
+                                 AND EXISTS
+                               (SELECT 1
+                                        FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                                       WHERE AIT.AIT_ASSIGNTMENT =
+                                             B.ACCT_CONTRACT_NO
+                                         AND AIT.AIT_CODE IN
+                                             (SELECT A.HIGH_VALUE
+                                                FROM AD1SYS.PARA_DOMAIN_DTL A
+                                               WHERE A.DOMAIN_ID = 'PVNDS'
+                                                 AND A.DOMAIN_VALUE IS NULL)
+                                         AND AIT.AIT_POSTING_DATE >= TGL1 --'01-APR-20'
+                                         AND AIT.AIT_POSTING_DATE < TGL2 --'02-APR-20'
+                                      )
+                                 AND EXISTS
+                               (SELECT 1
+                                        FROM AD1SYS.CASH_PV_NDS_WITHDRAWAL C
+                                       WHERE C.CASH_BRANCH_ID = B.ACCT_BR_ID
+                                         AND C.CASH_CONTRACT_NO =
+                                             B.ACCT_CONTRACT_NO
+                                         AND C.CASH_AMT_PENCAIRAN = 0
+                                         AND C.CASH_STATUS = '2')
+                               GROUP BY B.ACCT_CONTRACT_NO,
+                                        TRUNC(B.ACCT_CONF_DATE)) NET
+                       GROUP BY NET.ACCT_PV_DATE) T
+               GROUP BY T.CASH_PV_DATE, T.NOTES) XY
+       WHERE XX.NOTES(+) = XY.NOTES
+         AND XX.AIT_POSTING_DATE = XY.CASH_PV_DATE;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT PV NDS : ' || SQLERRM);
+  END;
+
+  BEGIN
+    --2 NON TRADE
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'PV NON TRADE' AS KODE_SCRIPT,
+             XX.AIT_POSTING_DATE,
+             XX.CLASS_CODE,
+             XY.PV,
+             XX.AIT_BY_PV,
+             XY.PV - XX.AIT_BY_PV SELISIH_JUMLAH,
+             XX.AMOUNT,
+             XY.AMOUNT,
+             XX.AMOUNT - XY.AMOUNT AS SELISIH_AMOUNT,
+             (CASE
+               WHEN (XY.PV - XX.AIT_BY_PV) = 0 AND
+                    (XX.AMOUNT - XY.AMOUNT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             XX.AIT_CODE,
+             XX.AIT_LINE_GT,
+             XX.AIT_GROUP_TRANSACTION
+      -----AIT BY PV
+        FROM (SELECT COUNT(AIT.AIT_DOC_HEADER_TEXT) AIT_BY_PV,
+                     SUM(AIT.AIT_AMOUNT1) AMOUNT,
+                     AIT.AIT_POSTING_DATE,
+                     CASE
+                       WHEN AIT.AIT_CODE = '0003001' THEN
+                        'B-TITIP'
+                       WHEN AIT.AIT_CODE = '0003002' THEN
+                        'B-TITIP.NT'
+                       WHEN AIT.AIT_CODE = '0003003' THEN
+                        'B-SMPN.BPKB'
+                       WHEN AIT.AIT_CODE = '0003007' THEN
+                        'B-UM.PK'
+                     END CLASS_CODE,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_CODE IN
+                     (SELECT A.HIGH_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                       WHERE A.DOMAIN_ID = 'PVNT') --('0003002', '0003003', '0003007')
+                 AND EXISTS (SELECT 1
+                        FROM CASH_PV_DETAIL B, CASH_PV_HEADER A
+                       WHERE A.CASH_BR_ID =
+                        LEFT(AIT.AIT_DOC_NO_APP, 4) AND A.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT AND A.CASH_PV_NO = B.CASH_PV_NO AND A.CASH_BR_ID = B.CASH_BR_ID AND A.CASH_PV_STATUS = '1' AND A.CASH_PV_PAID_DATE >= TGL1 AND A.CASH_PV_PAID_DATE < TGL2)
+                 AND AIT.AIT_DC_TYPE = '+'
+               GROUP BY AIT.AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION) XX,
+             
+             ----PV DTL
+             (SELECT SUM(TRAN.PV) PV,
+                     SUM(TRAN.AMOUNT) AMOUNT,
+                     TRAN.CASH_PV_PAID_DATE,
+                     TRAN.CASH_CLAS_CODE
+                FROM (SELECT COUNT(B.CASH_PV_NO) PV,
+                             SUM(B.CASH_DETAIL_AMT) AMOUNT,
+                             TRUNC(A.CASH_PV_PAID_DATE) CASH_PV_PAID_DATE, --Mod By Kresno 120644/X/22 @19OCT2022
+                             B.CASH_CLAS_CODE
+                        FROM AD1SYS.CASH_PV_HEADER A, AD1SYS.CASH_PV_DETAIL B
+                       WHERE A.CASH_BR_ID = B.CASH_BR_ID
+                         AND A.CASH_PV_NO = B.CASH_PV_NO
+                            
+                         AND TRIM(B.CASH_CLAS_CODE) IN
+                             (SELECT A.LOW_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL A
+                               WHERE A.DOMAIN_ID = 'PVNT')
+                            --('B-TITIP.NT', 'B-UM.PK', 'B-SMPN.BPKB')
+                         AND A.CASH_PV_PAID_DATE >= TGL1 --'01-APR-20'
+                         AND A.CASH_PV_PAID_DATE < TGL2 --'05-APR-20'
+                         AND A.CASH_PV_STATUS = '1'
+                            
+                         AND NOT EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                               WHERE AIT.AIT_DOC_HEADER_TEXT = A.CASH_PV_NO
+                                 AND AIT.AIT_CODE IN
+                                     (SELECT A.HIGH_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PVNT'))
+                      --('0003002', '0003003', '0003007'))
+                       GROUP BY A.CASH_PV_PAID_DATE, B.CASH_CLAS_CODE
+                      UNION
+                      SELECT COUNT(B.CASH_PV_NO),
+                             SUM(B.CASH_DETAIL_AMT),
+                             TRUNC(A.CASH_PV_PAID_DATE) CASH_PV_PAID_DATE, --Mod By Kresno 120644/X/22 @19OCT2022
+                             B.CASH_CLAS_CODE --, 'ADA AIT'
+                        FROM AD1SYS.CASH_PV_HEADER A, AD1SYS.CASH_PV_DETAIL B
+                       WHERE A.CASH_BR_ID = B.CASH_BR_ID
+                         AND A.CASH_PV_NO = B.CASH_PV_NO
+                         AND TRIM(B.CASH_CLAS_CODE) IN
+                             (SELECT A.LOW_VALUE
+                                FROM AD1SYS.PARA_DOMAIN_DTL A
+                               WHERE A.DOMAIN_ID = 'PVNT')
+                            --('B-TITIP.NT', 'B-UM.PK', 'B-SMPN.BPKB')
+                         AND A.CASH_PV_PAID_DATE >= TGL1 --'01-APR-20'
+                         AND A.CASH_PV_PAID_DATE < TGL2 --'05-APR-20'
+                         AND A.CASH_PV_STATUS = '1'
+                            
+                         AND EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+                               WHERE AIT.AIT_DOC_HEADER_TEXT = A.CASH_PV_NO
+                                 AND AIT.AIT_CODE IN
+                                     (SELECT A.HIGH_VALUE
+                                        FROM AD1SYS.PARA_DOMAIN_DTL A
+                                       WHERE A.DOMAIN_ID = 'PVNT'))
+                      --('0003002', '0003003', '0003007'))
+                       GROUP BY A.CASH_PV_PAID_DATE, B.CASH_CLAS_CODE) TRAN
+               GROUP BY TRAN.CASH_PV_PAID_DATE, TRAN.CASH_CLAS_CODE) XY
+       WHERE XY.CASH_PV_PAID_DATE = XX.AIT_POSTING_DATE
+         AND TRIM(XY.CASH_CLAS_CODE) = TRIM(XX.CLASS_CODE);
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT PV NON TRADE : ' || SQLERRM);
+  END;
+
+  --add mawar penambahan kode ait 042305/III/23 
+  BEGIN
+    --PV NON TRADE WITHDRAWAL
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'PV NON TRADE' AS KODE_SCRIPT,
+             XX.AIT_POSTING_DATE,
+             XX.CLASS_CODE,
+             XY.PV,
+             XX.AIT_BY_PV,
+             XY.PV - XX.AIT_BY_PV SELISIH_JUMLAH,
+             XX.AMOUNT,
+             XY.AMOUNT,
+             XX.AMOUNT - XY.AMOUNT AS SELISIH_AMOUNT,
+             (CASE
+               WHEN (XY.PV - XX.AIT_BY_PV) = 0 AND
+                    (XX.AMOUNT - XY.AMOUNT) = 0 THEN
+                'OKE'
+               ELSE
+                'SELISIH'
+             END) AS STATUS,
+             XX.AIT_CODE,
+             XX.AIT_LINE_GT,
+             XX.AIT_GROUP_TRANSACTION
+      --AIT BY PV
+        FROM (SELECT COUNT(AIT.AIT_DOC_HEADER_TEXT) AIT_BY_PV,
+                     SUM(AIT.AIT_AMOUNT1) AMOUNT,
+                     AIT.AIT_POSTING_DATE,
+                     AIT.AIT_CODE CLASS_CODE,
+                     AIT.AIT_CODE,
+                     AIT.AIT_LINE_GT,
+                     AIT.AIT_GROUP_TRANSACTION
+                FROM AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE AIT.AIT_CODE IN --0003006 
+                     (SELECT PDD.LOW_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL PDD
+                       WHERE PDD.DOMAIN_ID = 'PVNON'
+                         AND PDD.DOMAIN_VALUE = 'AITPVNON1')
+                 AND AIT.AIT_LINE_GT = 1
+                 AND EXISTS
+               (SELECT 1
+                        FROM CASH_PV_DETAIL B, CASH_PV_HEADER A
+                       WHERE A.CASH_BR_ID =
+                        LEFT(AIT.AIT_DOC_NO_APP, 4) AND A.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT AND A.CASH_PV_NO = B.CASH_PV_NO AND A.CASH_BR_ID = B.CASH_BR_ID AND A.CASH_PV_STATUS = '1' AND A.CASH_PV_PAID_DATE >= TGL1 AND A.CASH_PV_PAID_DATE < TGL2)
+               GROUP BY AIT.AIT_POSTING_DATE,
+                        AIT.AIT_CODE,
+                        AIT.AIT_LINE_GT,
+                        AIT.AIT_GROUP_TRANSACTION) XX,
+             --PV DTL
+             (SELECT COUNT(CPD.CASH_PV_NO) PV,
+                     SUM(CPD.CASH_DETAIL_AMT) AMOUNT,
+                     TRUNC(CPH.CASH_PV_PAID_DATE) CASH_PV_PAID_DATE,
+                     AIT.AIT_CODE CASH_CLAS_CODE --AIT_CODE
+                FROM AD1SYS.CASH_PV_HEADER        CPH,
+                     AD1SYS.CASH_PV_DETAIL        CPD,
+                     AD1SYS.SAP_WITHDRAWAL        SW,
+                     AD1SYS.ACCT_INTEGRATION_TRAN AIT
+               WHERE CPH.CASH_BR_ID = CPD.CASH_BR_ID
+                 AND CPH.CASH_PV_NO = CPD.CASH_PV_NO
+                 AND CPH.CASH_PV_PAID_DATE >= TGL1
+                 AND CPH.CASH_PV_PAID_DATE < TGL2
+                 AND CPH.CASH_PV_STATUS = '1'
+                 AND CPD.CASH_BR_ID = SW.SW_VENDOR
+                 AND SW.SW_NO_DOCUMENT_SAP = AIT.AIT_ASSIGNTMENT
+                 AND CPD.CASH_PV_NO = AIT.AIT_DOC_HEADER_TEXT
+                 AND AIT.AIT_LINE_GT = 1
+                 AND AIT.AIT_CODE IN --0003006 
+                     (SELECT PDD.LOW_VALUE
+                        FROM AD1SYS.PARA_DOMAIN_DTL PDD
+                       WHERE PDD.DOMAIN_ID = 'PVNON'
+                         AND PDD.DOMAIN_VALUE = 'AITPVNON1')
+               GROUP BY CPH.CASH_PV_PAID_DATE, AIT.AIT_CODE) XY;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'ERROR INSERT PV NON TRADE : ' || SQLERRM);
+  END;
+  --end add mawar
+END;
+
+/
+SELECT* FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate -1)
+and a.kode_script = 'PV NDS';

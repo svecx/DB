@@ -1,0 +1,2429 @@
+declare
+  TGL1           DATE := TRUNC(SYSDATE) - 1;
+  TGL2           DATE := TRUNC(SYSDATE);
+  SZAIT_CODE1    VARCHAR2(10);
+  SZAIT_CODE2    VARCHAR2(10);
+  MSG            VARCHAR2(1000);
+  SCOUNT_RV      NUMBER;
+  SAMOUNT_RV     NUMBER;
+  SCOUNT_AIT     NUMBER;
+  SAMOUNT_AIT    NUMBER;
+  SELISIH_COUNT  NUMBER;
+  SELISIH_AMOUNT NUMBER;
+
+BEGIN
+  /*BEGIN
+    -- 1
+    -- GJ-AL.PNOR
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'RV' AS KODE_SCRIPT,
+             aaa.CASH_RV_DATE,
+             aaa.CASH_CLAS_CODE,
+             COUNT(aaa.CASH_RV_NO) JUM_RV,
+             COUNT(aaa.ait_doc_header_text) JUM_RV_AIT,
+             COUNT(aaa.CASH_RV_NO) - COUNT(aaa.ait_doc_header_text) SELISIH_RV,
+             nvl(SUM(aaa.cash_rv_amt), 0) JUM_RV,
+             NVL(SUM(aaa.AIT_AMOUNT1), 0) SUM_AIT,
+             NVL(SUM(aaa.cash_rv_amt), 0) - nvl(SUM(aaa.AIT_AMOUNT1), 0) selisih_AMT
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              dd.ait_doc_header_text
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      a.cash_rv_amt,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'GJ-AL.PNOR' --IN( 'GJ-AL.PNOR','T-AL.P.REP')
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                          FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                                                                                           FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                                                                                          WHERE PGT.GT_TRADE = 'B'
+                                                                                                                                            AND pgt.gt_code =
+                                                                                                                                                dd.ait_code)
+              -- AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT
+              AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0009001' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) aaa
+       GROUP BY aaa.CASH_CLAS_CODE, aaa.CASH_RV_DATE;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG :=
+                              'ERROR INSERT GJ-AL.PNOR : ' || SQLERRM;
+  END;*/
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'GJ-AL.PNOR & T-AL.P.REP';
+  
+    --1 DAN 5 GJ-AL.PNOR T-AL.P.REP
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       BB.CASH_RV_DATE,
+       BB.CASH_CLAS_CODE,
+       COUNT(BB.CASH_RV_NO) JUM_RV,
+       COUNT(AA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AA.AIT_DOC_HEADER_TEXT) - COUNT(BB.CASH_RV_NO) SELISH_RV,
+       SUM(BB.CASH_RCVD_AMT) SUM_RV,
+       SUM(AA.AIT_AMOUNT1) SUM_AIT,
+       SUM(BB.CASH_RCVD_AMT) - SUM(AA.AIT_AMOUNT1) SELISIH_SUM,
+       (CASE
+         WHEN (COUNT(AA.AIT_DOC_HEADER_TEXT) - COUNT(BB.CASH_RV_NO)) = 0 AND
+              (SUM(BB.CASH_RCVD_AMT) - SUM(AA.AIT_AMOUNT1)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AA.AIT_CODE,
+       AA.AIT_LINE_GT,
+       AA.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                     TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                     A.CASH_RV_NO,
+                     B.CASH_CLAS_CODE
+                FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+               WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                 AND A.CASH_BR_ID = B.CASH_BR_ID
+                 AND TRIM(B.CASH_CLAS_CODE) IN
+                     (SELECT AM.CLASS_CODE
+                        FROM AD1SYS.ACCT_MAPPING_CODE AM
+                       WHERE AM.AIT_CODE = SZAIT_CODE1) --('GJ-AL.PNOR', 'T-AL.P.REP') --mod by satria 17-jul-2020
+                 AND A.CASH_RV_TYPE = 'T'
+                 AND A.CASH_STATUS = '1'
+                 AND A.CASH_BR_ID IN
+                     (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                 AND A.CASH_RV_DATE >= TGL1
+                 AND A.CASH_RV_DATE < TGL2
+               GROUP BY TRUNC(A.CASH_RV_DATE),
+                        A.CASH_RV_NO,
+                        B.CASH_CLAS_CODE) BB
+        LEFT JOIN (SELECT SUM(A.AIT_AMOUNT1) AIT_AMOUNT1,
+                          A.AIT_POSTING_DATE,
+                          A.AIT_DOC_HEADER_TEXT,
+                          A.AIT_CODE,
+                          A.AIT_LINE_GT,
+                          A.AIT_GROUP_TRANSACTION
+                     FROM AD1SYS.ACCT_INTEGRATION_TRAN A
+                    WHERE A.AIT_CODE = SZAIT_CODE1
+                      AND A.AIT_LINE_GT IN
+                          (SELECT PGT.GT_LINE
+                             FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                            WHERE PGT.GT_TRADE = 'B'
+                              AND PGT.GT_CODE = A.AIT_CODE)
+                      AND A.AIT_POSTING_DATE >= TGL1
+                      AND A.AIT_POSTING_DATE < TGL2
+                    GROUP BY A.AIT_POSTING_DATE,
+                             A.AIT_DOC_HEADER_TEXT,
+                             A.AIT_CODE,
+                             A.AIT_LINE_GT,
+                             A.AIT_GROUP_TRANSACTION -- add by satria 26-jun-20
+                   ) AA
+          ON BB.CASH_RV_NO = AA.AIT_DOC_HEADER_TEXT
+       GROUP BY BB.CASH_RV_DATE,
+                AA.AIT_CODE,
+                BB.CASH_CLAS_CODE,
+                AA.AIT_LINE_GT,
+                AA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT GJ-AL.PNOR, T-AL.P.REP : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  /*BEGIN
+    SELECT A.LOW_VALUE, A.HIGH_VALUE
+      INTO SZAIT_CODE1, SZAIT_CODE2
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'GJ-P.NOR';
+    -- 2
+    --GJ-P.NOR
+    SELECT DISTINCT COUNT(*), SUM(A.CASH_RV_AMT)
+      INTO SCOUNT_RV, SAMOUNT_RV
+      FROM AD1SYS.CASH_RV_HEADER A
+     WHERE A.CASH_RV_NO IN
+           (SELECT DISTINCT B.CASH_RV_NO
+              FROM CASH_RV_DETAIL B
+             WHERE TRIM(B.CASH_CLAS_CODE) = 'GJ-P.NOR') --IN( 'GJ-AL.PNOR','T-AL.P.REP')
+       AND A.CASH_RV_TYPE = 'T'
+       AND A.CASH_STATUS = '1'
+       AND TRUNC(A.CASH_RV_DATE) = TGL1;
+  
+    SELECT COUNT(1) COUNT_AIT, SUM(X.AIT_AMOUNT1) AIT
+      INTO SCOUNT_AIT, SAMOUNT_AIT
+      FROM AD1SYS.ACCT_INTEGRATION_TRAN X
+     WHERE X.AIT_CODE IN (SZAIT_CODE1, SZAIT_CODE2)
+       AND TRUNC(X.AIT_POSTING_DATE) = TGL1
+       AND X.AIT_LINE_GT = '1';
+  
+    SELISIH_COUNT  := NVL(SCOUNT_RV - SCOUNT_AIT, 0);
+    SELISIH_AMOUNT := NVL(SAMOUNT_RV - SAMOUNT_AIT, 0);
+  
+    IF SELISIH_COUNT <> 0 OR SELISIH_AMOUNT <> 0 THEN
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        (KODE_SCRIPT,
+         TRANSACTION_DATE,
+         KODE_TRANSAKSI,
+         JML_DATA_TRX,
+         JML_DATA_AIT,
+         SELISIH_JML_DATA,
+         SUM_TRANSAKSI,
+         SUM_AIT,
+         SELISIH_AMOUNT,
+         STATUS)
+      VALUES
+        ('RV 1', -- EDIT BY MUH
+         \*TO_DATE(*\TGL1\*, 'dd-mm-yyyy')*\, -- BY MUH
+         'GJ-P.NOR',
+         SCOUNT_RV,
+         SCOUNT_AIT,
+         SELISIH_COUNT,
+         SAMOUNT_RV,
+         SAMOUNT_AIT,
+         SELISIH_AMOUNT,
+         'SELISH');
+  
+    ELSE
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        (KODE_SCRIPT,
+         TRANSACTION_DATE,
+         KODE_TRANSAKSI,
+         JML_DATA_TRX,
+         JML_DATA_AIT,
+         SELISIH_JML_DATA,
+         SUM_TRANSAKSI,
+         SUM_AIT,
+         SELISIH_AMOUNT,
+         STATUS)
+      VALUES
+        ('RV',
+         \*TO_DATE(*\TGL1\*, 'dd-mm-yyyy')*\, -- BY MUH
+         'GJ-P.NOR',
+         SCOUNT_RV,
+         SCOUNT_AIT,
+         SELISIH_COUNT,
+         SAMOUNT_RV,
+         SAMOUNT_AIT,
+         SELISIH_AMOUNT,
+         'OKE');
+    END IF;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT GJ-P.NOR : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;*/
+
+  --GJ-P.NOR (DCIP)
+  BEGIN
+    SELECT A.HIGH_VALUE
+      INTO SZAIT_CODE2
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'GJ-P.NOR';
+  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV'*/
+       'RV Trade' AS KODE_SCRIPT,
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.KONTRAK_BARU) ASSIGNMENT,
+       COUNT(AAA.AIT_DOC_HEADER_TEXT) DOC_HEADER_TEXT,
+       COUNT(AAA.KONTRAK_BARU) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RV_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RV_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RV_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_CODE,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      A.CASH_RV_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      (SELECT CA.APPL_CONTRACT_NO
+                                         FROM AD1SYS.CRED_APPL CA
+                                        WHERE A.CASH_BR_ID = CA.APPL_BR_ID
+                                          AND B.CASH_CONTRACT_NO =
+                                              CA.APPL_REF_CONT_NO) KONTRAK_BARU,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'GJ-P.NOR' --IN( 'GJ-AL.PNOR','T-AL.P.REP')
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2
+                         AND EXISTS
+                       (SELECT 1
+                                FROM AD1SYS.CRED_APPL C
+                               WHERE B.CASH_BR_ID = C.APPL_BR_ID
+                                 AND B.CASH_CONTRACT_NO = C.APPL_REF_CONT_NO
+                                 AND EXISTS
+                               (SELECT 1
+                                        FROM AD1SYS.CRED_APPL_EXTEND D
+                                       WHERE C.APPL_CONTRACT_NO =
+                                             D.APPL_CONTRACT_NO
+                                         AND D.APPL_REHAB_TYPE =
+                                             (AD1SYS.FUNC_CEK_IN_PARA_DOMAIN('DCIP1',
+                                                                             'DCIP',
+                                                                             '',
+                                                                             '4'))))) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT = '1' /*AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                                                                                                                                                                                                 FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+              AND TRIM(AA.KONTRAK_BARU) = TRIM(DD.AIT_ASSIGNTMENT) AND DD.AIT_CODE IN(SZAIT_CODE2)
+              --   AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT
+              AND TRUNC(DD.AIT_POSTING_DATE) >= TGL1 AND TRUNC(DD.AIT_POSTING_DATE) < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT  GJ-P.NOR(DCIP) : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  --GJ-P.NOR (SELAIN DCIP)
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'GJ-P.NOR';
+  
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT DISTINCT /*'RV'*/ 'RV Trade' AS KODE_SCRIPT,
+                      A.CASH_RV_DATE,
+                      'GJ-P.NOR' CLASS_CODE,
+                      COUNT(A.CASH_RV_NO) SCOUNT_RV,
+                      COUNT(X.AIT_DOC_HEADER_TEXT) SCOUNT_AIT,
+                      COUNT(A.CASH_RV_NO) - COUNT(X.AIT_DOC_HEADER_TEXT) SELISH_RV,
+                      SUM(A.CASH_RV_AMT) SAMOUNT_RV,
+                      SUM(X.AIT_AMOUNT1) SAMOUNT_AIT,
+                      SUM(A.CASH_RV_AMT) - SUM(X.AIT_AMOUNT1) SELISH_SUM,
+                      (CASE
+                        WHEN COUNT(A.CASH_RV_NO) -
+                             COUNT(X.AIT_DOC_HEADER_TEXT) = 0 AND
+                             (SUM(A.CASH_RV_AMT) - SUM(X.AIT_AMOUNT1)) = 0 THEN
+                         'OKE'
+                        ELSE
+                         'SELISIH'
+                      END) AS STATUS,
+                      X.AIT_CODE,
+                      X.AIT_LINE_GT,
+                      X.AIT_GROUP_TRANSACTION
+        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.ACCT_INTEGRATION_TRAN X
+       WHERE A.CASH_RV_NO IN
+             (SELECT DISTINCT B.CASH_RV_NO
+                FROM CASH_RV_DETAIL B
+               WHERE TRIM(B.CASH_CLAS_CODE) = 'GJ-P.NOR')
+         AND A.CASH_RV_NO = X.AIT_DOC_HEADER_TEXT
+         AND A.CASH_BR_ID =
+        LEFT(X.AIT_DOC_HEADER_TEXT, 4) AND X.AIT_LINE_GT = '1' AND X.AIT_CODE = SZAIT_CODE1 AND A.CASH_RV_TYPE = 'T' AND A.CASH_STATUS = '1' AND TRUNC(X.AIT_POSTING_DATE) = TGL1 AND TRUNC(A.CASH_RV_DATE) = TGL1
+       GROUP BY A.CASH_RV_DATE,
+                X.AIT_CODE,
+                X.AIT_LINE_GT,
+                X.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT  GJ-P.NOR: ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-ADM.ANGS';
+    --3
+    --T-ADM.ANGS
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AA.CASH_RV_DATE,
+       'T-ADM.ANGS' AS KODE_TRANSAKSI,
+       COUNT(CASH_RV_NO),
+       COUNT(AIT_DOC_HEADER_TEXT),
+       COUNT(CASH_RV_NO) - COUNT(AIT_DOC_HEADER_TEXT),
+       SUM(AA.CASH_RCVD_AMT),
+       SUM(AIT_AMOUNT1),
+       SUM(AA.CASH_RCVD_AMT) - SUM(AIT_AMOUNT1),
+       (CASE
+         WHEN (COUNT(CASH_RV_NO) - COUNT(AIT_DOC_HEADER_TEXT)) = 0 AND
+              (SUM(AA.CASH_RCVD_AMT) - SUM(AIT_AMOUNT1)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       BB.AIT_CODE,
+       BB.AIT_LINE_GT,
+       BB.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                     TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                     A.CASH_RV_NO
+                FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+               WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                 AND A.CASH_BR_ID = B.CASH_BR_ID
+                 AND TRIM(B.CASH_CLAS_CODE) = 'T-ADM.ANGS'
+                 AND A.CASH_RV_TYPE = 'T'
+                 AND A.CASH_STATUS = '1'
+                 AND A.CASH_BR_ID IN
+                     (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                 AND A.CASH_RV_DATE >= TGL1
+                 AND A.CASH_RV_DATE < TGL2
+               GROUP BY TRUNC(A.CASH_RV_DATE), A.CASH_RV_NO) AA
+        LEFT JOIN (SELECT SUM(DD.AIT_AMOUNT1) AIT_AMOUNT1,
+                          TRUNC(DD.AIT_POSTING_DATE) AIT_POSTING_DATE,
+                          DD.AIT_DOC_HEADER_TEXT,
+                          DD.AIT_CODE,
+                          DD.AIT_LINE_GT,
+                          DD.AIT_GROUP_TRANSACTION
+                     FROM AD1SYS.ACCT_INTEGRATION_TRAN DD
+                    WHERE DD.AIT_CODE = SZAIT_CODE1
+                         /* AND DD.AIT_DOC_NO_APP NOT IN
+                         (SELECT CCC.AIT_DOC_NO_APP
+                            FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+                      AND DD.AIT_LINE_GT IN
+                          (SELECT PGT.GT_LINE
+                             FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                            WHERE PGT.GT_TRADE = 'B'
+                              AND PGT.GT_CODE = DD.AIT_CODE)
+                      AND DD.AIT_POSTING_DATE >= TGL1
+                      AND DD.AIT_POSTING_DATE < TGL2
+                    GROUP BY TRUNC(DD.AIT_POSTING_DATE),
+                             DD.AIT_DOC_HEADER_TEXT,
+                             DD.AIT_CODE,
+                             DD.AIT_LINE_GT,
+                             DD.AIT_GROUP_TRANSACTION) BB
+          ON /*AA.CASH_RV_DATE = BB.AIT_POSTING_DATE
+                                                                                                                                                                                                                                                                    AND*/
+       AA.CASH_RV_NO = BB.AIT_DOC_HEADER_TEXT
+       GROUP BY AA.CASH_RV_DATE,
+                BB.AIT_CODE,
+                BB.AIT_LINE_GT,
+                BB.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-ADM.ANGS : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-AL.EXCOL';
+    --4. T-AL.EXCOL
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO) JUM_RV,
+       COUNT(AAA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-AL.EXCOL'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) /* AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                                                                                                                                                                                                                  FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+              AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                      FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                     WHERE PGT.GT_TRADE = 'B'
+                                       AND PGT.GT_CODE = DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-AL.EXCOL : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  /*BEGIN
+    --5 T-AL.P.REP
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT 'RV' AS KODE_SCRIPT,
+             aaa.CASH_RV_DATE,
+             aaa.CASH_CLAS_CODE,
+             COUNT(aaa.CASH_RV_NO),
+             COUNT(aaa.ait_doc_header_text),
+             COUNT(aaa.CASH_RV_NO) - COUNT(aaa.ait_doc_header_text) SELISIH_RV,
+             nvl(SUM(aaa.cash_rv_amt), 0) SUM_RV,
+             NVL(SUM(aaa.AIT_AMOUNT1), 0) SUM_AIT,
+             NVL(SUM(aaa.cash_rv_amt), 0) - nvl(SUM(aaa.AIT_AMOUNT1), 0) selisih_AMT
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              dd.ait_doc_header_text
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      a.cash_rv_amt,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-AL.P.REP' --IN( 'GJ-AL.PNOR','T-AL.P.REP')
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                          FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                                                                                           FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                                                                                          WHERE PGT.GT_TRADE = 'B'
+                                                                                                                                            AND pgt.gt_code =
+                                                                                                                                                dd.ait_code)
+              -- AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT
+              AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0009001' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) aaa
+       GROUP BY aaa.CASH_CLAS_CODE, aaa.CASH_RV_DATE;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG :=
+                              'ERROR INSERT T-AL.P.REP : ' || SQLERRM;
+  END;*/
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-AL.SCS';
+    -- 6 T-AL.SCS
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1' */
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-AL.SCS'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-AL.SCS : ' || SQLERRM;
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-ALADMRSD';
+    -- 7 T-ALADMRSD
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-ALADMRSD'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-ALADMRSD : ' || SQLERRM;
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-ANGS';
+    --8 T-ANGS
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' KODE_SCRIPT, -- EDIT BY MUH
+       AA.CASH_RV_DATE,
+       'T-ANGS' AS KODE_TRANSAKSI,
+       COUNT(CASH_RV_NO) JUMLAH,
+       COUNT(AIT_DOC_HEADER_TEXT),
+       COUNT(CASH_RV_NO) - COUNT(AIT_DOC_HEADER_TEXT),
+       SUM(AA.CASH_RCVD_AMT) AMT_RV,
+       SUM(AIT_AMOUNT1),
+       SUM(AA.CASH_RCVD_AMT) - SUM(AIT_AMOUNT1),
+       (CASE
+         WHEN (COUNT(CASH_RV_NO) - COUNT(AIT_DOC_HEADER_TEXT)) = 0 AND
+              (SUM(AA.CASH_RCVD_AMT) - SUM(AIT_AMOUNT1)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       BB.AIT_CODE,
+       BB.AIT_LINE_GT,
+       BB.AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                     TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                     A.CASH_RV_NO,
+                     B.CASH_CLAS_CODE
+                FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+               WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                 AND A.CASH_BR_ID = B.CASH_BR_ID
+                 AND TRIM(B.CASH_CLAS_CODE) = 'T-ANGS'
+                 AND A.CASH_RV_TYPE = 'T'
+                 AND A.CASH_STATUS = '1'
+                 AND A.CASH_BR_ID IN
+                     (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                 AND A.CASH_RV_DATE >= TGL1
+                 AND A.CASH_RV_DATE < TGL2
+               GROUP BY TRUNC(A.CASH_RV_DATE),
+                        A.CASH_RV_NO,
+                        B.CASH_CLAS_CODE) AA
+        LEFT JOIN (SELECT SUM(DD.AIT_AMOUNT1) AIT_AMOUNT1,
+                          TRUNC(DD.AIT_POSTING_DATE) AIT_POSTING_DATE,
+                          DD.AIT_DOC_HEADER_TEXT,
+                          DD.AIT_CODE,
+                          DD.AIT_LINE_GT,
+                          DD.AIT_GROUP_TRANSACTION
+                     FROM AD1SYS.ACCT_INTEGRATION_TRAN DD
+                    WHERE DD.AIT_CODE = SZAIT_CODE1
+                      AND DD.AIT_LINE_GT IN
+                          (SELECT PGT.GT_LINE
+                             FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                            WHERE PGT.GT_TRADE = 'B'
+                              AND PGT.GT_CODE = DD.AIT_CODE)
+                      AND DD.AIT_POSTING_DATE >= TGL1
+                      AND DD.AIT_POSTING_DATE < TGL2
+                    GROUP BY TRUNC(DD.AIT_POSTING_DATE),
+                             DD.AIT_DOC_HEADER_TEXT,
+                             DD.AIT_CODE,
+                             DD.AIT_LINE_GT,
+                             DD.AIT_GROUP_TRANSACTION --add by satria 26-jun-20
+                   ) BB
+          ON AA.CASH_RV_NO = BB.AIT_DOC_HEADER_TEXT
+       GROUP BY AA.CASH_RV_DATE,
+                BB.AIT_CODE,
+                BB.AIT_LINE_GT,
+                BB.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-ANGS : ' || SQLERRM;
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-B.UJT';
+    --9 T-B.UJT
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /* 'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-B.UJT'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0004006' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-B.UJT : ' || SQLERRM;
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-BUNGA';
+    --10. T-BUNGA
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2' */
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO) JUM_RV,
+       COUNT(AAA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       --mod summary 07-aug-20
+       --NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV, --remark by satria  17-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') SUM_RV, -- add by satria 17-jul-20
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       -- NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT, --remark by satria  17-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              ((SELECT SUM(CR.CASH_RCVD_AMT)
+                  FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+                 WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+                   AND CR.CASH_RV_NO = H.CASH_RV_NO
+                   AND H.CASH_RV_DATE >= TGL1
+                   AND H.CASH_RV_DATE < TGL2
+                   AND H.CASH_STATUS = '1'
+                   AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       --end mod summary 07-aug-20
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.CASH_BR_ID,
+                              AA.CASH_RV_NO,
+                              AA.CASH_CLAS_CODE,
+                              AA.CASH_INSTAL_NO,
+                              --AA.CASH_RCVD_AMT, --remark by satria  17-jul-20
+                              AA.CASH_CONTRACT_NO,
+                              TRUNC(AA.CASH_RV_DATE) CASH_RV_DATE,
+                              AA.CASH_BRID_CUST,
+                              DD.AIT_CODE,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_INSTAL_NO,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      A.CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-BUNGA'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+              
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 /*AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                                                                                                                                                                                                                                                                                                                                      FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+              AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                      FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                     WHERE PGT.GT_TRADE = 'B') AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-BUNGA : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE, A.HIGH_VALUE
+      INTO SZAIT_CODE1, SZAIT_CODE2
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-C.NDS';
+    --11. T-C.NDS
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_CODE,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT, --EDITED BY ARI 230322
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-C.NDS'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT = '1' AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE IN(SZAIT_CODE1,
+                                                                                                                                 SZAIT_CODE2) AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-C.NDS : ' || SQLERRM;
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-CB.PNSB.3';
+    -- 12. T-CB.PNSB.3
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-CB.PNSB.3'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0017007' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-CB.PNSB.3 : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-DENDA';
+    --13. T-DENDA
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AMT_AIT), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AMT_AIT), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AMT_AIT), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT AA.CASH_BR_ID,
+                     AA.CASH_RV_NO,
+                     AA.CASH_CLAS_CODE,
+                     SUM(AA.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                     AA.CASH_CONTRACT_NO,
+                     AA.CASH_RV_DATE,
+                     AA.CASH_BRID_CUST,
+                     DDD.AIT_ASSIGNTMENT,
+                     SUM(DDD.AIT_AMOUNT1) AMT_AIT,
+                     DDD.AIT_DOC_HEADER_TEXT,
+                     DDD.AIT_CODE,
+                     DDD.AIT_LINE_GT,
+                     DDD.AIT_GROUP_TRANSACTION
+                FROM (SELECT B.CASH_BR_ID,
+                             B.CASH_RV_NO,
+                             B.CASH_CLAS_CODE,
+                             SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                             B.CASH_CONTRACT_NO,
+                             TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                             B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-DENDA'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2
+                       GROUP BY B.CASH_BR_ID,
+                                B.CASH_RV_NO,
+                                B.CASH_CLAS_CODE,
+                                B.CASH_CONTRACT_NO,
+                                TRUNC(A.CASH_RV_DATE),
+                                B.CASH_BRID_CUST) AA
+                LEFT JOIN (SELECT DD.AIT_ASSIGNTMENT,
+                                 DD.AIT_DOC_HEADER_TEXT,
+                                 SUM(DD.AIT_AMOUNT1) AIT_AMOUNT1,
+                                 DD.AIT_CODE,
+                                 DD.AIT_LINE_GT,
+                                 DD.AIT_GROUP_TRANSACTION
+                            FROM AD1SYS.ACCT_INTEGRATION_TRAN DD
+                           WHERE DD.AIT_DC_TYPE = '+'
+                             AND DD.AIT_CODE = SZAIT_CODE1
+                                /*AND DD.AIT_DOC_NO_APP NOT IN
+                                (SELECT CCC.AIT_DOC_NO_APP
+                                   FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+                             AND DD.AIT_POSTING_DATE >= TGL1
+                             AND DD.AIT_POSTING_DATE < TGL2
+                           GROUP BY DD.AIT_ASSIGNTMENT,
+                                    DD.AIT_DOC_HEADER_TEXT,
+                                    DD.AIT_CODE,
+                                    DD.AIT_LINE_GT,
+                                    DD.AIT_GROUP_TRANSACTION) DDD
+                  ON AA.CASH_CONTRACT_NO = DDD.AIT_ASSIGNTMENT
+                 AND AA.CASH_RV_NO = DDD.AIT_DOC_HEADER_TEXT
+               GROUP BY AA.CASH_BR_ID,
+                        AA.CASH_RV_NO,
+                        AA.CASH_CLAS_CODE,
+                        AA.CASH_CONTRACT_NO,
+                        AA.CASH_RV_DATE,
+                        AA.CASH_BRID_CUST,
+                        DDD.AIT_ASSIGNTMENT,
+                        DDD.AIT_DOC_HEADER_TEXT,
+                        DDD.AIT_CODE, -- add by satria 26-jun-2020
+                        DDD.AIT_LINE_GT, -- add by satria 26-jun-2020
+                        DDD.AIT_GROUP_TRANSACTION -- add by satria 26-jun-2020
+              ) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-DENDA : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-J.ADP';
+    --14. T-J.ADP
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 1'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       nvl(AAA.JUM_RV, 0),
+       nvl(BBB.JUM_RV_AIT, 0),
+       nvl(AAA.JUM_RV, 0) - nvl(BBB.JUM_RV_AIT, 0),
+       AAA.SUM_AMT_RV,
+       BBB.SUM_AMT_AIT,
+       AAA.SUM_AMT_RV - BBB.SUM_AMT_AIT,
+       (CASE
+         WHEN (AAA.JUM_RV - BBB.JUM_RV_AIT) = 0 AND
+              (AAA.SUM_AMT_RV - BBB.SUM_AMT_AIT) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       BBB.AIT_CODE,
+       BBB.AIT_LINE_GT,
+       BBB.AIT_GROUP_TRANSACTION
+        FROM (SELECT COUNT(CASH_RV_NO) JUM_RV,
+                     SUM(CASH_RCVD_AMT) SUM_AMT_RV,
+                     CASH_RV_DATE,
+                     CASH_CLAS_CODE
+                FROM (SELECT B.CASH_RV_NO,
+                             B.CASH_CLAS_CODE,
+                             B.CASH_RCVD_AMT,
+                             TRUNC(A.CASH_RV_DATE) CASH_RV_DATE
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-J.ADP'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+               GROUP BY CASH_RV_DATE, CASH_CLAS_CODE) AAA
+        LEFT JOIN (SELECT COUNT(BB.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+                          SUM(BB.AIT_AMOUNT1) SUM_AMT_AIT,
+                          AIT_POSTING_DATE,
+                          AIT_CODE,
+                          AIT_LINE_GT,
+                          AIT_GROUP_TRANSACTION
+                     FROM (SELECT DD.AIT_DOC_HEADER_TEXT,
+                                  DD.AIT_AMOUNT1,
+                                  DD.AIT_POSTING_DATE,
+                                  DD.AIT_CODE,
+                                  DD.AIT_LINE_GT,
+                                  DD.AIT_GROUP_TRANSACTION
+                             FROM AD1SYS.ACCT_INTEGRATION_TRAN DD
+                            WHERE DD.AIT_LINE_GT IN
+                                  (SELECT PGT.GT_LINE
+                                     FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                    WHERE PGT.GT_TRADE = 'B'
+                                      AND PGT.GT_CODE = DD.AIT_CODE)
+                              AND DD.AIT_CODE = SZAIT_CODE1
+                              AND DD.AIT_POSTING_DATE >= TGL1
+                              AND DD.AIT_POSTING_DATE < TGL2) BB
+                    GROUP BY BB.AIT_POSTING_DATE,
+                             BB.AIT_CODE,
+                             BB.AIT_LINE_GT,
+                             BB.AIT_GROUP_TRANSACTION) BBB
+          ON AAA.CASH_RV_DATE = BBB.AIT_POSTING_DATE;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-J.ADP : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  /*BEGIN
+      --15. T-P.WO.PL
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        SELECT 'RV' AS KODE_SCRIPT,
+               aaa.CASH_RV_DATE,
+               aaa.CASH_CLAS_CODE,
+               COUNT(aaa.CASH_RV_NO),
+               COUNT(aaa.ait_doc_header_text),
+               COUNT(aaa.CASH_RV_NO) - COUNT(aaa.ait_doc_header_text) SELISIH_RV,
+               nvl(SUM(aaa.cash_rv_amt), 0) SUM_RV,
+               NVL(SUM(aaa.AIT_AMOUNT1), 0) SUM_AIT,
+               NVL(SUM(aaa.cash_rv_amt), 0) - nvl(SUM(aaa.AIT_AMOUNT1), 0) selisih_AMT
+          FROM (SELECT DISTINCT AA.*,
+                                DD.AIT_DOC_NO_APP,
+                                DD.Ait_Doc_Header_Text,
+                                DD.AIT_AMOUNT1,
+                                dd.ait_code,
+                                dd.ait_posting_date,
+                                dd.ait_text
+                  FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                        B.CASH_RV_NO,
+                                        B.CASH_CLAS_CODE,
+                                        a.cash_rv_amt,
+                                        B.CASH_CONTRACT_NO,
+                                        TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                        B.CASH_BRID_CUST
+                          FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                         WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                           AND A.CASH_BR_ID = B.CASH_BR_ID
+                           AND TRIM(B.CASH_CLAS_CODE) = 'T-P.WO.PL'
+                           AND A.CASH_RV_TYPE = 'T'
+                           AND A.CASH_STATUS = '1'
+                           AND A.CASH_BR_ID IN
+                               (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                           AND A.CASH_RV_DATE >= TGL1
+                           AND A.CASH_RV_DATE < TGL2) AA
+                  LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                    ON AA.CASH_BR_ID =
+                  LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                     FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                    WHERE PGT.GT_TRADE = 'B'
+                                                                      AND pgt.gt_code =
+                                                                          dd.ait_code) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0013001' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) aaa
+         GROUP BY aaa.CASH_CLAS_CODE, aaa.CASH_RV_DATE, aaa.ait_posting_date;
+    EXCEPTION
+      WHEN OTHERS THEN
+        MSG :=
+                                'ERROR INSERT T-P.WO.PL : ' || SQLERRM;
+    END;
+  
+    BEGIN
+      --16. T-P.WO.PT
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        SELECT 'RV' AS KODE_SCRIPT,
+               aaa.CASH_RV_DATE,
+               aaa.CASH_CLAS_CODE,
+               COUNT(aaa.CASH_RV_NO),
+               COUNT(aaa.ait_doc_header_text),
+               COUNT(aaa.CASH_RV_NO) - COUNT(aaa.ait_doc_header_text) SELISIH_RV,
+               nvl(SUM(aaa.cash_rcvd_amt), 0) SUM_RV,
+               NVL(SUM(aaa.AIT_AMOUNT1), 0) SUM_AIT,
+               NVL(SUM(aaa.cash_rcvd_amt), 0) - nvl(SUM(aaa.AIT_AMOUNT1), 0) selisih_AMT
+          FROM (SELECT DISTINCT AA.*,
+                                DD.AIT_DOC_NO_APP,
+                                DD.Ait_Doc_Header_Text,
+                                DD.AIT_AMOUNT1,
+                                dd.ait_code,
+                                dd.ait_posting_date,
+                                dd.ait_text
+                  FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                        B.CASH_RV_NO,
+                                        B.CASH_CLAS_CODE,
+                                        b.cash_rcvd_amt,
+                                        B.CASH_CONTRACT_NO,
+                                        TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                        B.CASH_BRID_CUST
+                          FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                         WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                           AND A.CASH_BR_ID = B.CASH_BR_ID
+                           AND TRIM(B.CASH_CLAS_CODE) = 'T-P.WO.PT'
+                           AND A.CASH_RV_TYPE = 'T'
+                           AND A.CASH_STATUS = '1'
+                           AND A.CASH_BR_ID IN
+                               (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                           AND A.CASH_RV_DATE >= TGL1
+                           AND A.CASH_RV_DATE < TGL2) AA
+                  LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                    ON AA.CASH_BR_ID =
+                  LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                     FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                    WHERE PGT.GT_TRADE = 'B'
+                                                                      AND pgt.gt_code =
+                                                                          dd.ait_code) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0013001' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) aaa
+         GROUP BY aaa.CASH_CLAS_CODE, aaa.CASH_RV_DATE, aaa.ait_posting_date;
+    EXCEPTION
+      WHEN OTHERS THEN
+        MSG :=
+                                'ERROR INSERT T-P.WO.PT : ' || SQLERRM;
+    END;
+  
+    BEGIN
+      --17. T-P.WO.R
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        SELECT 'RV' AS KODE_SCRIPT,
+               CASH_RV_DATE,
+               AA.CASH_CLAS_CODE,
+               COUNT(CASH_RV_NO) COUNT_RV,
+               COUNT(AIT_DOC_HEADER_TEXT) RV_AIT,
+               COUNT(CASH_RV_NO) - COUNT(AIT_DOC_HEADER_TEXT) SELISH_RV,
+               SUM(AA.CASH_RCVD_AMT) AMT_RV,
+               SUM(AIT_AMOUNT1) AMT_AIT,
+               SUM(AA.CASH_RCVD_AMT) - SUM(AIT_AMOUNT1) SELISIH_AMT
+          FROM (SELECT SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                       TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                       A.CASH_RV_NO,
+                       B.CASH_CLAS_CODE
+                  FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                 WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                   AND A.CASH_BR_ID = B.CASH_BR_ID
+                   AND TRIM(B.CASH_CLAS_CODE) = 'T-P.WO.R'
+                   AND A.CASH_RV_TYPE = 'T'
+                   AND A.CASH_STATUS = '1'
+                   AND A.CASH_BR_ID IN
+                       (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                   AND A.CASH_RV_DATE >= TGL1
+                   AND A.CASH_RV_DATE < TGL2
+                 GROUP BY TRUNC(A.CASH_RV_DATE), A.CASH_RV_NO) AA
+          LEFT JOIN (SELECT SUM(DD.AIT_AMOUNT1) AIT_AMOUNT1,
+                            TRUNC(DD.AIT_POSTING_DATE) AIT_POSTING_DATE,
+                            DD.AIT_DOC_HEADER_TEXT
+                       FROM AD1SYS.ACCT_INTEGRATION_TRAN DD
+                      WHERE DD.AIT_CODE IN ('0013001', '0011010')
+                           \* AND DD.AIT_DOC_NO_APP NOT IN
+                           (SELECT CCC.AIT_DOC_NO_APP
+                              FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*\
+                        AND DD.AIT_LINE_GT IN
+                            (SELECT PGT.GT_LINE
+                               FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                              WHERE PGT.GT_TRADE = 'B'
+                                AND PGT.GT_CODE = DD.AIT_CODE)
+                        AND DD.AIT_POSTING_DATE >= TGL1
+                        AND DD.AIT_POSTING_DATE < TGL2
+                      GROUP BY TRUNC(DD.AIT_POSTING_DATE),
+                               DD.AIT_DOC_HEADER_TEXT) BB
+            ON \*AA.CASH_RV_DATE = BB.AIT_POSTING_DATE
+                                                 AND*\
+         AA.CASH_RV_NO = BB.AIT_DOC_HEADER_TEXT
+         GROUP BY AA.CASH_RV_DATE;
+    EXCEPTION
+      WHEN OTHERS THEN
+        MSG :=
+                                'ERROR INSERT T-P.WO.R : ' || SQLERRM;
+    END;
+  
+    BEGIN
+      --18. T-P.WO.THP
+      INSERT INTO AD1SYS.ACCT_RECON_AM
+        SELECT 'RV' AS KODE_SCRIPT,
+               aaa.CASH_RV_DATE,
+               aaa.CASH_CLAS_CODE,
+               COUNT(aaa.CASH_RV_NO),
+               COUNT(aaa.ait_doc_header_text),
+               COUNT(aaa.CASH_RV_NO) - COUNT(aaa.ait_doc_header_text) SELISIH_RV,
+               nvl(SUM(aaa.cash_rcvd_amt), 0) SUM_RV,
+               NVL(SUM(aaa.AIT_AMOUNT1), 0) SUM_AIT,
+               NVL(SUM(aaa.cash_rcvd_amt), 0) - nvl(SUM(aaa.AIT_AMOUNT1), 0) selisih_AMT
+          FROM (SELECT DISTINCT AA.*,
+  
+                                DD.AIT_DOC_NO_APP,
+                                DD.Ait_Doc_Header_Text,
+                                DD.AIT_AMOUNT1,
+                                dd.ait_code,
+                                dd.ait_posting_date,
+                                dd.ait_text
+                  FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                        B.CASH_RV_NO,
+                                        B.CASH_CLAS_CODE,
+                                        b.cash_rcvd_amt,
+                                        B.CASH_CONTRACT_NO,
+                                        TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                        B.CASH_BRID_CUST
+                          FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                         WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                           AND A.CASH_BR_ID = B.CASH_BR_ID
+                           AND TRIM(B.CASH_CLAS_CODE) = 'T-P.WO.THP'
+                           AND A.CASH_RV_TYPE = 'T'
+                           AND A.CASH_STATUS = '1'
+                           AND A.CASH_BR_ID IN
+                               (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                           AND A.CASH_RV_DATE >= TGL1
+                           AND A.CASH_RV_DATE < TGL2) AA
+                  LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                    ON AA.CASH_BR_ID =
+                  LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                     FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                    WHERE PGT.GT_TRADE = 'B'
+                                                                      AND pgt.gt_code =
+                                                                          dd.ait_code) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = '0013001' AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) aaa
+         GROUP BY aaa.CASH_CLAS_CODE, aaa.ait_posting_date, aaa.CASH_RV_DATE;
+    EXCEPTION
+      WHEN OTHERS THEN
+        MSG :=
+                                'ERROR INSERT T-P.WO.THP : ' || SQLERRM;
+    END;
+  */
+  -- penambahan kondisi ait_code
+  BEGIN
+    SELECT A.LOW_VALUE, A.HIGH_VALUE
+      INTO SZAIT_CODE1, SZAIT_CODE2
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-P.WO';
+    --15 SAMPAI 18 T-P.WO.R T-P.WO.PT T-P.WO.THP T-P.WO.PL
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       BB.CASH_RV_DATE,
+       BB.CASH_CLAS_CODE,
+       COUNT(BB.CASH_RV_NO) JUM_RV,
+       COUNT(AA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AA.AIT_DOC_HEADER_TEXT) - COUNT(BB.CASH_RV_NO) SELISH_RV,
+       SUM(BB.CASH_RCVD_AMT) SUM_RV,
+       SUM(AA.AIT_AMOUNT1) SUM_AIT,
+       SUM(BB.CASH_RCVD_AMT) - SUM(AA.AIT_AMOUNT1) SELISIH_SUM,
+       (CASE
+         WHEN (COUNT(AA.AIT_DOC_HEADER_TEXT) - COUNT(BB.CASH_RV_NO)) = 0 AND
+              (SUM(BB.CASH_RCVD_AMT) - SUM(AA.AIT_AMOUNT1)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AA.AIT_CODE,
+       AA.AIT_LINE_GT,
+       AIT_GROUP_TRANSACTION
+        FROM (SELECT SUM(B.CASH_RCVD_AMT) CASH_RCVD_AMT,
+                     TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                     A.CASH_RV_NO,
+                     B.CASH_CLAS_CODE
+                FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+               WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                 AND A.CASH_BR_ID = B.CASH_BR_ID
+                 AND TRIM(B.CASH_CLAS_CODE) IN
+                     ('T-P.WO.R', 'T-P.WO.PT', 'T-P.WO.THP', 'T-P.WO.PL')
+                 AND A.CASH_RV_TYPE = 'T'
+                 AND A.CASH_STATUS = '1'
+                 AND A.CASH_BR_ID IN
+                     (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                 AND A.CASH_RV_DATE >= TGL1
+                 AND A.CASH_RV_DATE < TGL2
+               GROUP BY TRUNC(A.CASH_RV_DATE),
+                        A.CASH_RV_NO,
+                        B.CASH_CLAS_CODE) BB
+        LEFT JOIN (SELECT SUM(A.AIT_AMOUNT1) AIT_AMOUNT1,
+                          A.AIT_POSTING_DATE,
+                          A.AIT_DOC_HEADER_TEXT,
+                          A.AIT_CODE,
+                          A.AIT_LINE_GT,
+                          A.AIT_GROUP_TRANSACTION
+                     FROM AD1SYS.ACCT_INTEGRATION_TRAN A
+                    WHERE A.AIT_CODE IN (SZAIT_CODE1, SZAIT_CODE2)
+                      AND A.AIT_LINE_GT = '1'
+                      AND A.AIT_POSTING_DATE >= TGL1
+                      AND A.AIT_POSTING_DATE < TGL2
+                    GROUP BY A.AIT_POSTING_DATE,
+                             A.AIT_DOC_HEADER_TEXT,
+                             A.AIT_CODE,
+                             A.AIT_LINE_GT,
+                             A.AIT_GROUP_TRANSACTION) AA
+          ON BB.CASH_RV_NO = AA.AIT_DOC_HEADER_TEXT
+         AND (AA.AIT_CODE = (CASE
+               WHEN BB.CASH_CLAS_CODE = 'T-P.WO.R' THEN
+                SZAIT_CODE1
+               ELSE
+                SZAIT_CODE2
+             END) OR AA.AIT_CODE = (CASE
+               WHEN BB.CASH_CLAS_CODE = 'T-P.WO.R' THEN
+                SZAIT_CODE2
+               ELSE
+                SZAIT_CODE2
+             END))
+       GROUP BY BB.CASH_RV_DATE,
+                AA.AIT_CODE,
+                BB.CASH_CLAS_CODE,
+                AA.AIT_LINE_GT,
+                AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-P.WO.R, T-P.WO.PT, T-P.WO.THP, T-P.WO.PL : ' ||
+             SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-PDP.OP-1';
+    --19. T-PDP.OP-1
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2' */
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO) JUM_RV,
+       COUNT(AAA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       --NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV, --remark by satria  29-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') SUM_RV, -- add by satria 29-jul-20
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       -- NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT, --remark by satria  29-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              ((SELECT SUM(CR.CASH_RCVD_AMT)
+                  FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+                 WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+                   AND CR.CASH_RV_NO = H.CASH_RV_NO
+                   AND H.CASH_RV_DATE >= TGL1
+                   AND H.CASH_RV_DATE < TGL2
+                   AND H.CASH_STATUS = '1'
+                   AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.CASH_BR_ID,
+                              AA.CASH_RV_NO,
+                              AA.CASH_CLAS_CODE,
+                              AA.CASH_INSTAL_NO,
+                              --AA.CASH_RCVD_AMT, --remark by satria  17-jul-20
+                              AA.CASH_CONTRACT_NO,
+                              TRUNC(AA.CASH_RV_DATE) CASH_RV_DATE,
+                              AA.CASH_BRID_CUST,
+                              DD.AIT_CODE,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_INSTAL_NO,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      A.CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-PDP.OP-1'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+              
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 /*AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                                                                                                                                                                                                                                                                                                                                      FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+              AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                      FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                     WHERE PGT.GT_TRADE = 'B') AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-PDP.OP-1 : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-PDP.OP-4';
+    --20. T-PDP.OP-4
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-PDP.OP-4'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-PDP.OP-4 : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-PDP.OP-5';
+    --21. T-PDP.OP-5
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-PDP.OP-5'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-PDP.OP-5 : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-R.PNSB.1';
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+    --22. T-R.PNSB.1
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-R.PNSB.1'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-R.PNSB.1 : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-RE.INS';
+    --23. T-RE.INS1 & T-RE.INS2
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /* 'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       'T-RE.INS' CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RV_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RV_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RV_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      --      B.CASH_CLAS_CODE,
+                                      A.CASH_RV_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) IN
+                             ('T-RE.INS1', 'T-RE.INS2')
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-RE.INS : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-TITIP.RSD';
+    --24. T-TITIP.RSD
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-TTP.RSD'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.AIT_POSTING_DATE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-TTP.RSD : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-SMPN.BPKB';
+    --25. T-SMPN.BPKB
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO),
+       COUNT(AAA.AIT_DOC_HEADER_TEXT),
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV,
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.*,
+                              
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_CODE,
+                              DD.AIT_POSTING_DATE,
+                              DD.AIT_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-SMPN.BPKB'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                   FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                  WHERE PGT.GT_TRADE = 'B'
+                                                                    AND PGT.GT_CODE =
+                                                                        DD.AIT_CODE) AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_POSTING_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AAA.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-SMPN.BPKB : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+
+  BEGIN
+    SELECT A.LOW_VALUE
+      INTO SZAIT_CODE1
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-TITIP';
+    --26. T-TITIP
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2' */
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       AAA.CASH_RV_DATE,
+       AAA.CASH_CLAS_CODE,
+       COUNT(AAA.CASH_RV_NO) JUM_RV,
+       COUNT(AAA.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       --NVL(SUM(AAA.CASH_RCVD_AMT), 0) SUM_RV, --remark by satria  17-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') SUM_RV, -- add by satria 17-jul-20
+       NVL(SUM(AAA.AIT_AMOUNT1), 0) SUM_AIT,
+       -- NVL(SUM(AAA.CASH_RCVD_AMT), 0) - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT, --remark by satria  17-jul-20
+       (SELECT SUM(CR.CASH_RCVD_AMT)
+          FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+         WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+           AND CR.CASH_RV_NO = H.CASH_RV_NO
+           AND H.CASH_RV_DATE >= TGL1
+           AND H.CASH_RV_DATE < TGL2
+           AND H.CASH_STATUS = '1'
+           AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(AAA.CASH_RV_NO) - COUNT(AAA.AIT_DOC_HEADER_TEXT)) = 0 AND
+              ((SELECT SUM(CR.CASH_RCVD_AMT)
+                  FROM AD1SYS.CASH_RV_DETAIL CR, AD1SYS.CASH_RV_HEADER H
+                 WHERE CR.CASH_CLAS_CODE = AAA.CASH_CLAS_CODE
+                   AND CR.CASH_RV_NO = H.CASH_RV_NO
+                   AND H.CASH_RV_DATE >= TGL1
+                   AND H.CASH_RV_DATE < TGL2
+                   AND H.CASH_STATUS = '1'
+                   AND H.CASH_RV_TYPE = 'T') - NVL(SUM(AAA.AIT_AMOUNT1), 0)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       AAA.AIT_CODE,
+       AAA.AIT_LINE_GT,
+       AAA.AIT_GROUP_TRANSACTION
+        FROM (SELECT DISTINCT AA.CASH_BR_ID,
+                              AA.CASH_RV_NO,
+                              AA.CASH_CLAS_CODE,
+                              AA.CASH_INSTAL_NO,
+                              --AA.CASH_RCVD_AMT, --remark by satria  17-jul-20
+                              AA.CASH_CONTRACT_NO,
+                              TRUNC(AA.CASH_RV_DATE) CASH_RV_DATE,
+                              AA.CASH_BRID_CUST,
+                              DD.AIT_CODE,
+                              DD.AIT_DOC_NO_APP,
+                              DD.AIT_ASSIGNTMENT,
+                              DD.AIT_AMOUNT1,
+                              DD.AIT_DOC_HEADER_TEXT,
+                              DD.AIT_LINE_GT,
+                              DD.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                      B.CASH_RV_NO,
+                                      B.CASH_CLAS_CODE,
+                                      B.CASH_INSTAL_NO,
+                                      B.CASH_RCVD_AMT,
+                                      B.CASH_CONTRACT_NO,
+                                      A.CASH_RV_DATE,
+                                      B.CASH_BRID_CUST
+                        FROM AD1SYS.CASH_RV_HEADER A, AD1SYS.CASH_RV_DETAIL B
+                       WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                         AND A.CASH_BR_ID = B.CASH_BR_ID
+                         AND TRIM(B.CASH_CLAS_CODE) = 'T-TITIP'
+                         AND A.CASH_RV_TYPE = 'T'
+                         AND A.CASH_STATUS = '1'
+                         AND A.CASH_BR_ID IN
+                             (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                         AND A.CASH_RV_DATE >= TGL1
+                         AND A.CASH_RV_DATE < TGL2) AA
+              
+                LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                  ON AA.CASH_BR_ID =
+                LEFT(DD.AIT_DOC_NO_APP, 4) AND AA.CASH_CONTRACT_NO = DD.AIT_ASSIGNTMENT AND AA.CASH_RCVD_AMT = DD.AIT_AMOUNT1 /*v.13*/
+              AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE = SZAIT_CODE1 /*AND DD.AIT_DOC_NO_APP NOT IN (SELECT CCC.AIT_DOC_NO_APP
+                                                                                                                                                                                                                                                                                                                                                                                    FROM IT_OPR1_AOL.TEMP_MANUAL_REVERSE_AIT CCC)*/
+              AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                      FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                     WHERE PGT.GT_TRADE = 'B') AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+       GROUP BY AAA.CASH_CLAS_CODE,
+                AAA.CASH_RV_DATE,
+                AAA.AIT_CODE,
+                AAA.AIT_LINE_GT,
+                AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-TITIP : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+  --INI 1 CLASS CODE LEBIH DARI 1 AIT_CODE
+  BEGIN
+    SELECT A.LOW_VALUE, A.HIGH_VALUE
+      INTO SZAIT_CODE1, SZAIT_CODE2
+      FROM AD1SYS.PARA_DOMAIN_DTL A
+     WHERE A.DOMAIN_ID = 'RV'
+       AND A.DOMAIN_VALUE = 'T-UM.PK';
+    --27. T-UM.PK
+    INSERT INTO AD1SYS.ACCT_RECON_AM
+      SELECT /*'RV 2'*/
+       'RV Trade' AS KODE_SCRIPT, -- EDIT BY MUH
+       ZZZZ.CASH_RV_DATE,
+       ZZZZ.CASH_CLAS_CODE,
+       COUNT(ZZZZ.CASH_RV_NO) JUM_RV,
+       COUNT(ZZZZ.AIT_DOC_HEADER_TEXT) JUM_RV_AIT,
+       COUNT(ZZZZ.CASH_RV_NO) - COUNT(ZZZZ.AIT_DOC_HEADER_TEXT) SELISIH_RV,
+       SUM(ZZZZ.SUM_RV) SUM_RV,
+       SUM(ZZZZ.SUM_AIT) SUM_AIT,
+       SUM(ZZZZ.SUM_RV) - SUM(ZZZZ.SUM_AIT) SELISIH_AMT,
+       (CASE
+         WHEN (COUNT(ZZZZ.CASH_RV_NO) - COUNT(ZZZZ.AIT_DOC_HEADER_TEXT)) = 0 AND
+              (SUM(ZZZZ.SUM_RV) - SUM(ZZZZ.SUM_AIT)) = 0 THEN
+          'OKE'
+         ELSE
+          'SELISIH'
+       END) AS STATUS,
+       ZZZZ.AIT_CODE,
+       ZZZZ.AIT_LINE_GT,
+       ZZZZ.AIT_GROUP_TRANSACTION
+        FROM (SELECT AAA.CASH_CLAS_CODE,
+                     AAA.AIT_POSTING_DATE,
+                     AAA.CASH_RV_DATE,
+                     AAA.CASH_RV_NO,
+                     SUM(AAA.CASH_RCVD_AMT) SUM_RV,
+                     SUM(AAA.AIT_AMOUNT1) SUM_AIT,
+                     AAA.AIT_DOC_HEADER_TEXT,
+                     AAA.AIT_CODE,
+                     AAA.AIT_LINE_GT,
+                     AAA.AIT_GROUP_TRANSACTION
+                FROM (SELECT DISTINCT AA.*,
+                                      DD.AIT_DOC_NO_APP,
+                                      DD.AIT_DOC_HEADER_TEXT,
+                                      DD.AIT_AMOUNT1,
+                                      DD.AIT_CODE,
+                                      DD.AIT_POSTING_DATE,
+                                      DD.AIT_TEXT,
+                                      DD.AIT_LINE_GT,
+                                      DD.AIT_GROUP_TRANSACTION
+                        FROM (SELECT DISTINCT B.CASH_BR_ID,
+                                              B.CASH_RV_NO,
+                                              B.CASH_CLAS_CODE,
+                                              B.CASH_RCVD_AMT,
+                                              B.CASH_CONTRACT_NO,
+                                              TRUNC(A.CASH_RV_DATE) CASH_RV_DATE,
+                                              B.CASH_BRID_CUST
+                                FROM AD1SYS.CASH_RV_HEADER A,
+                                     AD1SYS.CASH_RV_DETAIL B
+                               WHERE A.CASH_RV_NO = B.CASH_RV_NO
+                                 AND A.CASH_BR_ID = B.CASH_BR_ID
+                                 AND TRIM(B.CASH_CLAS_CODE) = 'T-UM.PK'
+                                 AND A.CASH_RV_TYPE = 'T'
+                                 AND A.CASH_STATUS = '1'
+                                 AND A.CASH_BR_ID IN
+                                     (SELECT C.BRAN_BR_ID FROM PARA_BRAN_INFO C)
+                                 AND A.CASH_RV_DATE >= TGL1
+                                 AND A.CASH_RV_DATE < TGL2) AA
+                        LEFT JOIN AD1SYS.ACCT_INTEGRATION_TRAN DD
+                          ON AA.CASH_BR_ID =
+                        LEFT(DD.AIT_DOC_NO_APP, 4) AND DD.AIT_LINE_GT IN (SELECT PGT.GT_LINE
+                                                                           FROM AD1SYS.PARA_GROUP_TRANSACTION PGT
+                                                                          WHERE PGT.GT_TRADE = 'B'
+                                                                            AND PGT.GT_CODE =
+                                                                                DD.AIT_CODE) AND DD.AIT_AMOUNT1 = AA.CASH_RCVD_AMT AND AA.CASH_RV_NO = DD.AIT_DOC_HEADER_TEXT AND DD.AIT_CODE IN(SZAIT_CODE1,
+                                                                                                                                                                                                SZAIT_CODE2) AND DD.AIT_POSTING_DATE >= TGL1 AND DD.AIT_POSTING_DATE < TGL2) AAA
+               GROUP BY AAA.CASH_CLAS_CODE,
+                        AAA.AIT_POSTING_DATE,
+                        AAA.CASH_RV_NO,
+                        AAA.CASH_RV_DATE,
+                        AAA.AIT_DOC_HEADER_TEXT,
+                        AAA.AIT_CODE,
+                        AAA.AIT_LINE_GT,
+                        AAA.AIT_GROUP_TRANSACTION) ZZZZ
+       GROUP BY ZZZZ.CASH_CLAS_CODE,
+                ZZZZ.AIT_POSTING_DATE,
+                ZZZZ.CASH_RV_DATE,
+                ZZZZ.AIT_CODE,
+                ZZZZ.AIT_LINE_GT,
+                ZZZZ.AIT_GROUP_TRANSACTION;
+  EXCEPTION
+    WHEN OTHERS THEN
+      MSG := 'ERROR INSERT T-UM.PK : ' || SQLERRM;
+      DBMS_OUTPUT.PUT_LINE(MSG);
+  END;
+END;
+
+
+/
+SELECT* FROM AD1SYS.ACCT_RECON_AM A 
+WHERE A.TRANSACTION_DATE = trunc(sysdate - 1);
+
+
+select JENIS_TRANSAKSI,
+       TRANSACTION_DATE,
+       INSERT_DATE,
+       TRAN_CODE,
+       sum(X2.JML_DT_TRAN) JML_DT_TRAN,
+       sum(X2.JML_DT_AIT) JML_DT_AIT,
+       sum(X2.AMOUNT_TRAN) AMOUNT_TRAN,
+       sum(X2.AMOUNT_AIT) AMOUNT_AIT,
+       NVL(sum(X2.JML_SAP), 0) JML_SAP,
+       NVL(sum(X2.JML_DT_TRAN), 0) - NVL(sum(X2.JML_DT_AIT), 0) JML_TRAN_VS_AIT,
+       NVL(sum(X2.AMOUNT_AIT), 0) - NVL(sum(X2.AMOUNT_TRAN), 0) AMT_TRAN_VS_AIT,
+       NVL(sum(X2.AMOUNT_AIT), 0) - NVL(sum(X2.JML_SAP), 0) AMT_AIT_VS_SAP
+  from (SELECT F1.JENIS_TRANSAKSI,
+               F2.SOURCE_SYS,
+               F1.GROUP_CODE,
+               F1.TRAN_CODE,
+               F2.INSERT_DATE,
+               F1.TRANSACTION_DATE,
+               --      F1.LINE_ITEM,
+               F1.JML_DT_TRAN,
+               F1.JML_DT_AIT,
+               F1.AMOUNT_TRAN,
+               F1.AMOUNT_AIT,
+               F2.AMOUNT JML_SAP,
+               F1.JML_DT_TRAN - F1.JML_DT_AIT JML_TRAN_VS_AIT,
+               F1.AMOUNT_TRAN - F1.AMOUNT_AIT AMT_TRAN_VS_AIT,
+               F1.AMOUNT_AIT - F2.AMOUNT AMT_AIT_VS_SAP,
+               'SUM' KODE,
+               CASE
+                 WHEN F1.JML_DT_TRAN - F1.JML_DT_AIT = 0 AND
+                      F1.AMOUNT_TRAN - F1.AMOUNT_AIT = 0 AND
+                      F1.AMOUNT_AIT - F2.AMOUNT = 0 THEN
+                  0
+                 WHEN F1.JML_DT_TRAN - F1.JML_DT_AIT <> 0 OR
+                      F1.AMOUNT_TRAN - F1.AMOUNT_AIT <> 0 OR
+                      F1.AMOUNT_AIT - F2.AMOUNT <> 0 THEN
+                  1
+               END KET,
+               SYSDATE
+          FROM (SELECT ARM.GROUP_CODE,
+                       ARM.TRAN_CODE,
+                       ARM.LINE_ITEM,
+                       ARM.TRANSACTION_DATE,
+                       SUM(ARM.JML_DATA_TRX) JML_DT_TRAN,
+                       SUM(ARM.JML_DATA_AIT) JML_DT_AIT,
+                       SUM(ARM.SUM_TRANSAKSI) AMOUNT_TRAN,
+                       SUM(ARM.SUM_AIT) AMOUNT_AIT,
+                       (SELECT MAX(UPPER(AMC.JENIS_TRANSAKSI))
+                          FROM AD1SYS.ACCT_MAPPING_CODE AMC
+                         WHERE AMC.GROUP_CODE = ARM.GROUP_CODE
+                           AND AMC.AIT_CODE = ARM.TRAN_CODE
+                           AND AMC.LINE_ITEM = ARM.LINE_ITEM) JENIS_TRANSAKSI
+                  FROM AD1SYS.ACCT_RECON_AM ARM
+                 WHERE TRUNC(ARM.TRANSACTION_DATE) = '26dec23'
+                   AND ARM.TRAN_CODE IS NOT NULL
+                --AND ARM.TRAN_CODE='0013001'
+                 GROUP BY ARM.GROUP_CODE,
+                          ARM.TRAN_CODE,
+                          ARM.LINE_ITEM,
+                          ARM.TRANSACTION_DATE) F1
+          LEFT JOIN (SELECT JENIS_TRANSAKSI,
+                           MAX(SOURCE_SYS) SOURCE_SYS,
+                           MAX(GROUP_CODE) GROUP_CODE,
+                           TRAN_CODE TRAN_CODE,
+                           MAX(LINE_ITEM) LINE_ITEM,
+                           ABS(SUM(AMOUNT)) AMOUNT,
+                           INSERT_DATE
+                      FROM (SELECT (SELECT MAX(UPPER(AMC.JENIS_TRANSAKSI))
+                                      FROM AD1SYS.ACCT_MAPPING_CODE AMC
+                                     WHERE AMC.GROUP_CODE = SLI.GROUP_CODE
+                                       AND AMC.AIT_CODE = SLI.TRAN_CODE
+                                       AND AMC.LINE_ITEM = SLI.LINE_ITEM) JENIS_TRANSAKSI,
+                                   SLI.*
+                              FROM AD1SYS.SAP_LINE_ITEM SLI
+                             WHERE TRUNC(SLI.INSERT_DATE) = '26dec23'
+                            --  AND SLI.TRAN_CODE ='0013001'
+                            
+                            ) X1
+                     GROUP BY JENIS_TRANSAKSI, TRAN_CODE, INSERT_DATE) F2
+            ON F1.GROUP_CODE = F2.GROUP_CODE
+           AND F1.TRAN_CODE = F2.TRAN_CODE
+           AND F1.LINE_ITEM = F2.LINE_ITEM
+           AND f1.transaction_date = f2.INSERT_DATE) X2
+ GROUP BY JENIS_TRANSAKSI, INSERT_DATE, TRANSACTION_DATE, TRAN_CODE;
