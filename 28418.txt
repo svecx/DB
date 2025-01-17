@@ -1,0 +1,16 @@
+-- sebelum menjalannkan sp cek keunganan baik admin dan pinalti sudah lunas
+BEGIN
+
+  AD1SYS.CRVTRADEMGR_UPDATECMIFLUNAS('0408', -- cabang
+                                     '040821113121',-- kontrak
+                                     0,
+                                     '01',
+                                     '',
+                                     '',
+                                     '',
+                                     '');
+
+END;
+
+-- cek status rec_status 01
+select * from ad1sys.arec_cont_mast where arec_cont_no = '040821113121'

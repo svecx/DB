@@ -1,0 +1,24 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN48570', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'DEPO_CURRENT_BAL', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '2', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '1', -- BATCH
+   'ARU',--EXECUTOR
+   'SISTEM CMS ERROR BPKB WO TIDAK BISA OUT'--KETERANGAN
+   );
+   
+UPDATE ad1sys.arec_cont_mast acm 
+SET AREC_ADMIN_RECV = '260000' -- 40000
+-- SELECT * FROM ad1sys.arec_cont_mast acm 
+where acm.arec_cont_no = '072920213337'; 
+
+UPDATE ad1sys.acct_deposit ad
+SET DEPO_CURRENT_BAL = '0' --540000
+-- SELECT * FROM ad1sys.acct_deposit ad 
+where ad.depo_ref_no = '072920213337' AND DEPO_TRANS_CODE = 'PPA19';   

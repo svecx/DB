@@ -1,0 +1,15 @@
+  -- cek laci
+  select * from ad1cms.cola_master_laci where cola_laci_id = '1A-L03-B03.2'
+  and cola_tempat = '0121'
+        
+  SELECT * FROM AD1CMS.COLA_MASTER_DATA A
+  WHERE A.cola_desc_35 IN ('1A-L03-B03.2')
+  and COLA_BRAN_LOC = '0121';
+  
+  --update 
+  update ad1cms.cola_master_laci
+  set cola_jml_current = '0' -- 1
+  --select * from ad1cms.cola_master_laci 
+  where cola_laci_id = '1A-L03-B03.2'
+  and cola_tempat = '0121'
+        

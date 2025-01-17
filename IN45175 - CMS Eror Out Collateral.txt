@@ -1,0 +1,31 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+VALUES
+('IN45175', -- TICKET
+'SK - 51211457', -- NIK
+'AD1CMS', -- MODUL
+'acct_deposit', -- NAMA TABEL
+'0', -- ROW INSERT
+'1', -- ROW UPDATE
+'0', -- ROW DELETE
+TRUNC(SYSDATE),
+'2', -- BATCH
+'ARU',--EXECUTOR
+'CMS Eror Out Collateral'--KETERANGAN
+);
+
+SELECT * FROM        
+ad1sys.arec_cont_schd acs where acs.arec_cont_no = '078722112287';
+
+SELECT * FROM         
+ad1sys.arec_cont_mast acm where acm.arec_cont_no = '078722112287';
+
+SELECT * FROM ad1sys.acct_deposit ad 
+where ad.depo_ref_no = '078722112287';   
+   
+
+update ad1sys.acct_deposit ad 
+set depo_initial_bal = '0' -- 5000
+-- SELECT * FROM ad1sys.acct_deposit ad 
+where ad.depo_ref_no = '078722112287'
+and depo_trans_Code = 'PPA19' ;
+

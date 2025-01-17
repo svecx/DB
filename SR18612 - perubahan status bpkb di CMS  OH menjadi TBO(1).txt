@@ -1,0 +1,29 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR18612', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_master_data', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '3', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   ' perubahan status bpkb di CMS OH menjadi TBO'--KETERANGAN
+   );
+
+-- cek cmh, cmd , cdr 
+delete
+--SELECT * 
+FROM ad1cms.cola_master_data cmd where cmd.cola_Id = 'B240000227711'; -- borow cola_addt_2
+
+delete
+--SELECT * 
+FROM AD1CMS.COLA_MASTER_HISTORY CMH WHERE CMH.COLA_cONT_NO IN ('011623212950');
+
+delete
+--SELECT * 
+FROM AD1CMS.COLA_DETAIL_REG CDR WHERE CDR.COLA_CONT_NO IN ('011623212950'); --3 -1 -14/03/24
+
+SELECT rowid, cth.* FROM ad1cms.cola_transact_header cth where cth.cola_memo_no = '04002403K0000013039'; -- cola_confirm 1

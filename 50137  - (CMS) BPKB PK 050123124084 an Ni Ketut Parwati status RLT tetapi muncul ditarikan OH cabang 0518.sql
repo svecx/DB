@@ -1,0 +1,16 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN50137', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'TEMP_COLLA_AUTOREGIS', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '4', -- BATCH
+   'ARU',--EXECUTOR
+   '(CMS) BPKB PK 050123124084 an Ni Ketut Parwati status RLT tetapi muncul ditarikan OH cabang 0518'--KETERANGAN
+   );
+   
+SELECT rowid, tca.* FROM AD1CMS.TEMP_COLLA_AUTOREGIS TCA WHERE TCA.APPL_CONTRACT_NO IN ('050123124084'); -- sztransak = 3

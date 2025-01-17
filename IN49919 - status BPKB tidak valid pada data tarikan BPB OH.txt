@@ -1,0 +1,38 @@
+-- BATCHING AOL
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN49919', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_header', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '4', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '1', -- BATCH
+   'ARU',--EXECUTOR
+   'status BPKB tidak valid pada data tarikan BPB OH'--KETERANGAN
+   );
+   
+-- actual dan di history collateral status RLT namun di data tarikan OH BPKB status masih OH
+--X 061221113928 ( Sumarni Siagian )
+--SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061221113928';
+
+-- 062122213282 ( Mayzen Batara S ) -- OH RMT
+SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '062122213282';
+
+--X 061223111097 ( Haposan G )
+--SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061223111097';
+
+--X 061222112695 ( Rugun Butarbuta )
+--SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061222112695';
+
+-- actual dan di history collateral status OH namun ditarikan OH BPKB tidak ada
+-- 061211106002 ( Nasib S ) -- OH RMT
+SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061211106002';
+
+-- 061217100043 ( Super S ) -- OH BRAN 
+SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061217100043';
+
+-- 061220119676 ( Amsal N ) -- OH   RMT   06AB
+SELECT ROWID, CH.* FROM ad1sys.cola_header ch where ch.cola_cont_no = '061220119676';

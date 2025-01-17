@@ -1,0 +1,21 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN45261', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'temp_colla_autoregis', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '4', -- BATCH
+   'ARU',--EXECUTOR
+   '[CMS] ERROR STATUS BPKB PK CANCEL PPD MASIH STATUS OH'--KETERANGAN
+   );
+
+
+update ad1cms.temp_colla_autoregis tca 
+set sztransaksi = '9', status = '0' -- 3 : 1
+-- SELECT * FROM ad1cms.temp_colla_autoregis tca 
+where tca.appl_contract_no = '011024114581';
+

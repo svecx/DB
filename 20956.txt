@@ -1,0 +1,59 @@
+    INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN20956', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'COLA_MASTER_HISTORY', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '3', -- ROW UPDATE
+   '2', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '4', -- BATCH
+   'ARU',--EXECUTOR
+   'Perbaikan No KontrakReff Seharusnya 013621113737'--KETERANGAN
+   );
+  
+  SELECT * FROM AD1CMS.COLA_DETAIL_REG A
+  WHERE A.COLA_CONT_NO IN ('013621119819')
+  and cola_cont_reff = '013621113727'; -- PERTHATIKAN REF YANG INGIN DI CEK
+  
+  SELECT * FROM AD1CMS.COLA_DETAIL_REG A
+  WHERE A.cola_id IN ('B210002524443');
+  
+  SELECT * FROM AD1CMS.COLA_MASTER_HISTORY A
+  WHERE A.COLA_CONT_NO IN ('013621119819')
+  AND A.COLA_ID = 'B210002524443'  -- PASTIKAN COLA_ID SAMA DENGAN COLA_MASTER_DATA --AMBIL COLA_MEMO_NO PADA TABEL INI 
+  and a.cola_memo_no = '01002107J0000047277';
+ 
+  SELECT * FROM AD1CMS.COLA_MASTER_DATA A
+  WHERE A.COLA_ID IN ('B210002524443');
+
+-- PERINTAH DELETE
+delete from ad1cms.cola_detail_reg a 
+--select * from ad1cms.cola_detail_reg a 
+where a.cola_id = 'B210002524443'
+and a.cola_cont_no = '013621119819';
+
+delete from ad1cms.cola_master_history a 
+--select * from ad1cms.cola_master_history a 
+where a.cola_id = 'B210002524443'
+and a.cola_memo_no = '01002107J0000047277';
+
+-- UPDATE
+update ad1cms.cola_transact_header a
+set a.cola_confirmed = '2' 
+--select * from ad1cms.cola_transact_header a 
+where a.cola_memo_no = '01002107J0000047277';
+
+update ad1cms.cola_detail_reg a
+set a.cola_addt_4 = '1'
+--select * from ad1cms.cola_detail_reg a 
+where a.cola_id = 'B210002524443'
+and a.cola_addt_3 = '2';
+
+update ad1cms.temp_colla_autoregis a
+set a.status = '0',
+    a.appl_cont_old = '013621113737',
+    A.APPL_DATE_ADD = TRUNC(SYSDATE)
+--select * from ad1cms.temp_colla_autoregis a 
+where a.appl_contract_no = '013621119819';

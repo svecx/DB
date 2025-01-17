@@ -1,0 +1,65 @@
+    INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR15946', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'COLA_MASTER_HISTORY', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '3', -- ROW UPDATE
+   '2', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '4', -- BATCH
+   'ARU',--EXECUTOR
+   'Update Data'--KETERANGAN
+   );
+-- cek dan pastikan yang akan di ubah
+--   COLA_CONT_NO = 040823112078 (perubahan atas pk utama yang bermasalah [5] )
+--   cola_cont_reff = 040822119883    (no ref yang ingin di rubah (salah) [2]
+--   cola_id = B220000184710    ( no cola_id [3] )
+--   cola_memo_no = 04082402J0000001978 (no memmo atas pk yan ingin di rubah [4])
+--   appl_cont_old = 013621113737 -- (cek pk harus sesuai dengan cola_cont_reff  [3] ) 
+
+  SELECT * FROM AD1CMS.COLA_DETAIL_REG A
+  WHERE A.COLA_CONT_NO IN ('040823112078')
+  and cola_cont_reff = '040822112329'; -- PERTHATIKAN REF YANG INGIN DI CEK -- 040822119883
+  
+  SELECT * FROM AD1CMS.COLA_DETAIL_REG A
+  WHERE A.cola_id IN ('B220000184710');
+  
+  SELECT * FROM AD1CMS.COLA_MASTER_HISTORY A
+  WHERE A.COLA_CONT_NO IN ('040823112078')
+  AND A.COLA_ID = 'B220000184710'  -- PASTIKAN COLA_ID SAMA DENGAN COLA_MASTER_DATA --AMBIL COLA_MEMO_NO PADA TABEL INI 
+  and a.cola_memo_no = '04082402J0000001978';
+ 
+  SELECT * FROM AD1CMS.COLA_MASTER_DATA A
+  WHERE A.COLA_ID IN ('B220000184710');
+
+-- PERINTAH DELETE
+delete from ad1cms.cola_detail_reg a 
+--select * from ad1cms.cola_detail_reg a 
+where a.cola_id = 'B220000184710'
+and a.cola_cont_no = '040823112078';
+
+delete from ad1cms.cola_master_history a 
+--select * from ad1cms.cola_master_history a 
+where a.cola_id = 'B220000184710'
+and a.cola_memo_no = '04082402J0000001978';
+
+-- UPDATE
+update ad1cms.cola_transact_header a
+set a.cola_confirmed = '2' 
+--select * from ad1cms.cola_transact_header a 
+where a.cola_memo_no = '04082402J0000001978';
+
+update ad1cms.cola_detail_reg a
+set a.cola_addt_4 = '1'
+--select * from ad1cms.cola_detail_reg a 
+where a.cola_id = 'B220000184710'
+and a.cola_addt_3 = '2';
+
+update ad1cms.temp_colla_autoregis a
+set a.status = '0',
+    a.appl_cont_old = '013621113737',
+    A.APPL_DATE_ADD = TRUNC(SYSDATE)
+--select * from ad1cms.temp_colla_autoregis a 
+where a.appl_contract_no = '040823112078';

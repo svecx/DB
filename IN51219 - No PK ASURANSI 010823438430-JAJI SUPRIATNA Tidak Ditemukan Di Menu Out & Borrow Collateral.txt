@@ -1,0 +1,23 @@
+-- BATCHING AOL
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN51219', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'INSR_STAGING_SAP', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   'No PK ASURANSI 010823438430-JAJI SUPRIATNA Tidak Ditemukan Di Menu Out & Borrow Collateral'--KETERANGAN
+   );
+   
+SELECT A.INSR_ID, A.INSR_CONT_NO, A.* -- cek ini bila data kosong lalu ambil INSR_ID untuk melakukan update pada bagian bawah
+  FROM AD1SYS.INSR_CLAIM_MASTER A -- samakan icm_INSR_VALUE_RESULT dengan isp INSR_AMOUNT 16762500
+ WHERE A.INSR_CONT_NO IN ('010823438430');
+
+-- samakan INSR_CODE degan INSR_ID_icm(INSR_CLAIM_MASTER)
+select rowid, a.* from ad1sys.INSR_STAGING_SAP a -- jika ada mohon lakukan handover
+where a.INSR_CONT_NO = '010823438430';

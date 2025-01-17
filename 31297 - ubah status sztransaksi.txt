@@ -1,0 +1,69 @@
+SELECT ROWID, A.*
+  FROM AD1CMS.TEMP_COLLA_AUTOREGIS A
+ WHERE A.APPL_CONTRACT_NO = '013624112499';
+/
+UPDATE AD1CMS.TEMP_COLLA_AUTOREGIS A
+   SET A.SZTRANSAKSI = (CASE
+                         WHEN A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL AND
+                              A.APPL_CONT_OLD IS NULL THEN
+                          '7' -- Sudah PPD
+                         WHEN A.APPL_PPD_DATE IS NULL AND
+                              A.APPL_PPD_NO IS NULL AND
+                              A.APPL_CONT_OLD IS NULL THEN
+                          '3' -- Belum PPD 
+                         WHEN (SELECT CMD.COLA_STATUS
+                                 FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                      AD1CMS.COLA_DETAIL_REG  CDR
+                                WHERE CMD.COLA_ID = CDR.COLA_ID
+                                  AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) !=
+                              'RLT' AND A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL
+                               THEN
+                          '6' -- Kontrak lama sudah RLT dan pk baru belum PPD
+                          WHEN (SELECT CMD.COLA_STATUS
+                                 FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                      AD1CMS.COLA_DETAIL_REG  CDR
+                                WHERE CMD.COLA_ID = CDR.COLA_ID
+                                  AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) =
+                              'RLT' AND A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL
+                               THEN
+                          '7' -- Kontrak lama sudah RLT dan pk baru sudah PPD
+                          WHEN (SELECT CMD.COLA_STATUS
+                                 FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                      AD1CMS.COLA_DETAIL_REG  CDR
+                                WHERE CMD.COLA_ID = CDR.COLA_ID
+                                  AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) =
+                              'RLT' AND A.APPL_PPD_DATE IS NULL AND
+                              A.APPL_PPD_NO IS NULL
+                               THEN
+                          '3' -- Kontrak lama sudah RLT dan pk baru belum PPD
+                       END),
+       A.APPL_CONT_OLD = (CASE
+                           WHEN A.APPL_CONT_OLD IS NOT NULL AND
+                                (SELECT CMD.COLA_STATUS
+                                   FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                        AD1CMS.COLA_DETAIL_REG  CDR
+                                  WHERE CMD.COLA_ID = CDR.COLA_ID
+                                    AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) =
+                                'RLT' THEN
+                            NULL
+                           ELSE
+                            A.APPL_CONT_OLD
+                         END),
+       A.APPL_DATE_ADD = TRUNC(SYSDATE)
+ WHERE A.APPL_CONTRACT_NO = '013624112499';
+
+INSERT INTO IT_OPR.TEMP_BATCH_PIJ --CMS
+VALUES
+  ('CMS', 1, 0, 0, 
+	'NO_TIKET' --Diganti dengan tiket
+	, 'Data tidak ditemukan', TRUNC(SYSDATE));
+/
+SELECT ROWID, A.*
+  FROM AD1CMS.TEMP_COLLA_AUTOREGIS A
+ WHERE A.APPL_CONTRACT_NO = '013624112499';
+
+SELECT * FROM IT_OPR.TEMP_BATCH_PIJ A WHERE A.TIKET = 'NO_TIKET';
+ --009

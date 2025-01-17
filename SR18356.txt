@@ -1,0 +1,40 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR18356', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'COLA_MASTER_HISTORY', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '0', -- ROW UPDATE
+   '3', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   'Update Data penghapusan lokasi laci CMS'--KETERANGAN
+   );
+
+delete from ad1cms.cola_master_laci cml 
+-- SELECT * FROM ad1cms.cola_master_laci cml 
+where cml.cola_laci_id in ('1A-L01-B05.1') and cml.cola_tempat = '06151501001';
+
+delete from ad1cms.cola_master_laci cml 
+-- SELECT * FROM  ad1cms.cola_master_laci cml 
+where cml.cola_laci_id in ('1A-L01-B05.1','1A-L01-B06.1') and cml.cola_tempat = '06151301002';
+
+
+
+SELECT * FROM ad1cms.cola_master_laci cml where cml.cola_laci_id in ('1A-L01-B05.1') and cml.cola_tempat = '06151501001';
+
+SELECT * FROM  ad1cms.cola_master_laci cml where cml.cola_laci_id in ('1A-L01-B05.1','1A-L01-B06.1') and cml.cola_tempat = '06151301002';
+
+-- insert
+insert into ad1cms.cola_master_laci (COLA_BR_TRANS, COLA_TEMPAT, COLA_LACI_ID, COLA_CABANG, COLA_JML_MAX, COLA_JML_CURRENT, COL_LOG_ID, COLA_SYSDATE, COLA_USER_TRANS, COLA_JNS_LACI)
+values ('0615', '06151501001', '1A-L01-B05.1', '0603', 150, 0, '[14003081-1DBF-66A7-E063-9B015B0AF26D]', to_date('19-03-2024 15:35:08', 'dd-mm-yyyy hh24:mi:ss'), '10012990', '1');
+
+
+insert into ad1cms.cola_master_laci (COLA_BR_TRANS, COLA_TEMPAT, COLA_LACI_ID, COLA_CABANG, COLA_JML_MAX, COLA_JML_CURRENT, COL_LOG_ID, COLA_SYSDATE, COLA_USER_TRANS, COLA_JNS_LACI)
+values ('0615', '06151301002', '1A-L01-B05.1', '0602', 150, 0, '[F3A00DF5-834F-22D8-E053-9B015B0A1F08]', to_date('01-02-2023 15:15:48', 'dd-mm-yyyy hh24:mi:ss'), '10012990', '1');
+
+insert into ad1cms.cola_master_laci (COLA_BR_TRANS, COLA_TEMPAT, COLA_LACI_ID, COLA_CABANG, COLA_JML_MAX, COLA_JML_CURRENT, COL_LOG_ID, COLA_SYSDATE, COLA_USER_TRANS, COLA_JNS_LACI)
+values ('0615', '06151301002', '1A-L01-B06.1', '0603', 150, 0, '[12D2F2FA-1DD2-5541-E063-9B015B0A5627]', to_date('04-03-2024 15:59:54', 'dd-mm-yyyy hh24:mi:ss'), '10012990', '1');
+

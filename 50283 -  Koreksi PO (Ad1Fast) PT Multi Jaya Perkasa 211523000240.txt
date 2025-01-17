@@ -1,0 +1,77 @@
+-- BATCHING AOL
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN50283', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'om_trn_appl_hdr', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '0', -- ROW UPDATE
+   '1', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '1', -- BATCH
+   'ARU',--EXECUTOR
+   'Koreksi PO (Ad1Fast) PT Multi Jaya Perkasa 211523000240'--KETERANGAN
+   );
+   
+SELECT A.CONTRACT_NO, A.*
+  FROM AD1FAST.OM_TRN_APPL_HDR A
+WHERE A.CONTRACT_NO = '211523000240';
+ --WHERE A.appl_no = '0000232115000230';
+ 
+--- Pastikan tidak ada di CA
+select * from ad1sys.cred_appl ca
+where ca.APPL_CONTRACT_NO = '211523000240';
+
+--- Koreksi PO
+DECLARE
+
+  tiket    varchar2(20) := '47320';
+  v_sukses NUMBER := 0;
+  v_cek    NUMBER := 0;
+
+BEGIN
+
+  for rec in (select aa.branch_id, aa.appl_no, aa.cif_no
+                from ad1fast.om_trn_appl_hdr aa
+               where aa.branch_id = '2115'
+                 and aa.contract_no = '211523000240') loop
+  
+    v_sukses := ad1fast.om_f_koreksi_po(rec.appl_no, tiket, 'koreksi po');
+  
+    IF (v_sukses = 0) THEN
+      RAISE_APPLICATION_ERROR('-20000',
+                              'Koreksi gagal untuk Application No : ' ||
+                              rec.appl_no);
+      RETURN;
+    ELSE
+      ad1fast.om_p_proses_hist(rec.appl_no,
+                               rec.cif_no,
+                               'N',
+                               'PO',
+                               NULL,
+                               24,
+                               tiket,
+                               SYSDATE,
+                               'U');
+      BEGIN
+        SELECT 1
+          INTO v_cek
+          FROM AD1SYS.CRED_INST_APPR_ACCT CIAA
+         WHERE CIAA.APPL_DELETED = 0
+           AND CIAA.APPL_NO = rec.appl_no
+           AND ROWNUM = 1;
+      EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+          v_cek := 0;
+      END;
+    
+      IF v_cek = 1 THEN
+        UPDATE AD1SYS.CRED_INST_APPR_ACCT CIAA
+           SET CIAA.APPL_DELETED = 1
+         WHERE CIAA.APPL_NO = rec.appl_no;
+      END IF;
+    END IF;
+  
+  end loop;
+END;

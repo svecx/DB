@@ -1,0 +1,45 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN42740', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'COLA_MASTER_HISTORY', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '3', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   'UBAH STATUS DI SYSTEM CMS 011021126670 ABDUL HAKIM MENJADI ON HAND CABANG'--KETERANGAN
+   );
+
+-- LAKUKAN PENGECEKAN PADA TABLE INI TERLEBIH DAHULU
+SELECT * FROM           
+ad1cms.temp_colla_autoregis tca where tca.appl_contract_no = '011021126670';
+
+SELECT * FROM               
+ad1cms.cola_master_history cmh where cmh.cola_cont_no = '011021126670';
+
+SELECT * FROM               
+ad1cms.cola_master_history cmh where cmh.cola_id in ('B240000119953','B220000060143');
+
+-- UPDATE
+
+update ad1cms.cola_master_history cmh
+set cmh.cola_id = 'B240000119953' -- B220000060143
+--SELECT * FROM ad1cms.cola_master_history cmh 
+-- where cmh.cola_id in ('B220000060143')
+where cmh.cola_id in ('B240000119953','B220000060143')
+and cola_memo_no in ('01002402C0000012900','01102402D0000001760'); --ubah atas memom D & C
+
+UPDATE ad1cms.cola_detail_reg cdr 
+SET COLA_ADDT_4 = '' -- 1
+-- SELECT * FROM  ad1cms.cola_detail_reg cdr 
+where cdr.cola_id in  ('B220000060143');
+('B240000119953','B220000060143');
+
+update ad1cms.cola_master_data cmd 
+set cola_status = 'RLT', cola_location = 'REG' -- ambil data nya dari memo K (KOREKSI DI CMH) OH Bran
+--SELECT * FROM ad1cms.cola_master_data cmd 
+where cmd.cola_id in  ('B220000060143'); 
+('B240000119953','B220000060143');

@@ -1,0 +1,16 @@
+select * from ad1cms.temp_colla_autoregis where appl_contract_no = '067924210215';
+
+select * from ad1cms.cola_detail_reg where cola_cont_no = '067924210215'
+-- cek status
+select * from ad1cms.cola_master_data where cola_id = 'B240000094649'
+-- 
+
+
+
+select rowid, a.* from ad1cms.cola_transact_header a where a.cola_surat_jalan  = '070024SJRM00390';
+
+select * from ad1cms.cola_master_data a
+where a.cola_id in (
+select cola_id from ad1cms.cola_transact_detail where cola_memo_no  = '07002402C0000001798')
+
+select * from ad1cms.cola_master_history where cola_id  = 'B240000093055';

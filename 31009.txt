@@ -1,0 +1,45 @@
+UPDATE AD1CMS.TEMP_COLLA_AUTOREGIS A
+   SET A.SZTRANSAKSI = (CASE -- 6
+                         WHEN A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL AND
+                              A.APPL_CONT_OLD IS NULL THEN
+                          '7' --Belum PPD
+                         WHEN A.APPL_PPD_DATE IS NULL AND
+                              A.APPL_PPD_NO IS NULL AND
+                              A.APPL_CONT_OLD IS NULL THEN
+                          '3' --Sudah PPD
+                         WHEN (SELECT CMD.COLA_STATUS
+                                 FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                      AD1CMS.COLA_DETAIL_REG  CDR
+                                WHERE CMD.COLA_ID = CDR.COLA_ID
+                                  AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) !=
+                              'RLT' AND A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL THEN
+                          '6' -- Kontrak lama sudah RLT dan pk baru belum PPD
+                         WHEN (SELECT CMD.COLA_STATUS
+                                 FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                      AD1CMS.COLA_DETAIL_REG  CDR
+                                WHERE CMD.COLA_ID = CDR.COLA_ID
+                                  AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) =
+                              'RLT' AND A.APPL_PPD_DATE IS NOT NULL AND
+                              A.APPL_PPD_NO IS NOT NULL THEN
+                          '7' -- Kontrak lama sudah RLT dan pk baru sudah PPD
+                       END),
+       A.APPL_CONT_OLD = (CASE
+                           WHEN A.APPL_CONT_OLD IS NOT NULL AND
+                                (SELECT CMD.COLA_STATUS
+                                   FROM AD1CMS.COLA_MASTER_DATA CMD,
+                                        AD1CMS.COLA_DETAIL_REG  CDR
+                                  WHERE CMD.COLA_ID = CDR.COLA_ID
+                                    AND CDR.COLA_CONT_NO = A.APPL_CONT_OLD) =
+                                'RLT' THEN
+                            NULL
+                           ELSE
+                            A.APPL_CONT_OLD
+                         END), 
+       A.APPL_DATE_ADD = TRUNC(SYSDATE)  -- 12/02/2024
+ WHERE A.APPL_CONTRACT_NO = '040724111238';
+ 
+ SELECT ROWID, A.*
+    FROM AD1CMS.TEMP_COLLA_AUTOREGIS A
+   WHERE A.APPL_CONTRACT_NO = '040724111238';

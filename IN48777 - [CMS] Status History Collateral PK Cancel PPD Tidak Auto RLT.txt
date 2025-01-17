@@ -1,0 +1,17 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN48777', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'TEMP_COLLA_AUTOREGIS', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   '[CMS] Status History Collateral PK Cancel PPD Tidak Auto RLT '--KETERANGAN
+   );
+   
+SELECT rowid, tca.* FROM AD1CMS.TEMP_COLLA_AUTOREGIS TCA WHERE TCA.APPL_CONTRACT_NO IN ('021224413269'); --sztransak = 9
+

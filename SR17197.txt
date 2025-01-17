@@ -1,0 +1,23 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR17197 ', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_master_laci', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   'Update Data'--KETERANGAN
+   );
+
+update ad1cms.cola_master_laci a
+set cola_laci_id = '1A-L01-B02.1'
+-- SELECT * FROM ad1cms.cola_master_laci a
+-- where a.cola_laci_id = '1A-L02-B01.1'
+where a.cola_laci_id = '1A-L01-B02.1'
+and a.cola_cabang = '0126';
+-- [130B74F7-AD76-4638-E063-9B015B0A4210]
+-- 10074177
