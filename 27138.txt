@@ -1,0 +1,2 @@
+SELECT rowid,cmh.* FROM AD1CMS.COLA_MASTER_HISTORY CMH WHERE CMH.cola_Id in ('B210002524443'); -- 031123117939
+SELECT rowid, cmd.* FROM ad1cms.cola_master_data cmd where cmd.cola_Id in ('B210002524443'); --  DARMAWAN SE

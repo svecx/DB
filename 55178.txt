@@ -1,0 +1,18 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN55178', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'TEMP_COLLA_AUTOREGIS', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '2', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '2', -- BATCH
+   'ARU',--EXECUTOR
+   'Error Out Collateral'--KETERANGAN
+   );
+   
+   -- update ppd from ca
+   -- sz_t 3 -> 7
+SELECT  rowid, tca.* FROM AD1CMS.TEMP_COLLA_AUTOREGIS TCA WHERE TCA.APPL_CONTRACT_NO IN ('041021115758');

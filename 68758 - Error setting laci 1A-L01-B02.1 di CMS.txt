@@ -1,0 +1,6 @@
+update -- SELECT * FROM 
+ad1cms.cola_master_laci cml 
+set COLA_JNS_LACI = '1' -- 2
+where cml.cola_laci_id in ('1A-L01-B02.1') and cml.cola_tempat = '0131';
+
+SELECT * FROM ad1cms.cola_master_laci cml where cml.cola_laci_id in ('1A-L01-B02.1') and cml.cola_tempat = '0131'; 

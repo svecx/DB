@@ -1,0 +1,14 @@
+ select * from dbo.CMS_UPLOAD_BPKB where contractnumber in
+ ('012724111367') and DOC_TYPE = 'BPKBUtamaCustomer';
+  
+
+BEGIN TRAN --COMMIT --ROLLBACK
+
+INSERT INTO [Data_Archive_New].[dbo].[LOG_PATCHING]
+SELECT '86638','51211457 - SK','BPKBLib','CMS_UPLOAD_BPKB','1','0','0',GETDATE(),'4'
+
+
+-- 1. 012724111367 an ABDUL FATAH
+INSERT INTO CMS_UPLOAD_BPKB (BranchID, ContractNumber, CustomerName, ScanBy, BeginScan, DOC_ID, DOC_TYPE, DOC_TITLE, JOB_TITLE, DOC_VERSION, Isactive, typeprocess)
+VALUES ('0127', '012724111367', 'ABDUL FATAH', '10080280', '2024-04-26 07:18:59.087', '169F8A15-0538-CF3E-9F89-8F1945800002', 'FakturBPKBCustomer', 'FakturBPKBCustomer_012724111367.pdf', 'COLLATERAL STAFF', '1', '1', 'Scan')
+

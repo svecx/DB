@@ -1,0 +1,288 @@
+--1. Update ad1sys.cola_header menjadi sesuai dengan status yang akan di update pada ad1cms
+
+--2. Script Cancel RLT pada ad1cms
+
+--spce B230000107453
+
+/*
+
+DECLARE
+
+  SZMEMO       VARCHAR2(30);
+  SZMSGERROR   VARCHAR2(250);
+  SZCOLAID     VARCHAR2(50) := 'B240000107492';              -- COLLATERAL ID
+  SZSTAT       VARCHAR2(10) := 'OH';                         -- OH
+  SZLOC        VARCHAR2(10) := 'REG';                        -- BRAN, RMT
+  SZBRANLOC    VARCHAR2(15) := '0100';                       -- KODE REGION 
+  SZMEMOTYPE   VARCHAR2(2) := '21';                          --x MEMO_TYPE CANCEL RLT
+  SZREASON     VARCHAR2(50) := 'INOMOR  001800/PPSJ/IV/2024';                -- NO PPSJ 
+  SZLOGS       VARCHAR2(50) := 'IT-UPDATE 53744';     -- NOMOR TIKET
+  SZCOLL_SEQ   NUMBER;
+  SZLOC_COLLID VARCHAR2(100);
+  SZRESPONSE   VARCHAR2(100);
+  SZCEKSTR     VARCHAR2(5);
+
+BEGIN
+
+  SZMEMO := AD1CMS.FUNC_GENERATE_NOMEMO(SZBRANLOC, SYSDATE, SZMEMOTYPE);
+
+  --get data 
+  FOR PK IN (SELECT *
+               FROM AD1CMS.COLA_MASTER_DATA A
+              WHERE A.COLA_ID = SZCOLAID) LOOP
+  
+    --proses save
+    --insert transact detail 
+    BEGIN
+      AD1CMS.PRC_COLA_INSERT_TRANS_DETAIL(AD1CMS.LEFT(SZBRANLOC, 4),
+                                          SZMEMO,
+                                          PK.COLA_ID,
+                                          PK.COLA_DESC_13,
+                                          '1', --COLA_SEQ_NO 
+                                          '', --COLA_SEQ_CONT 
+                                          PK.COLA_NO, --COLA_DESC_1
+                                          '', --COLA_DESC_2
+                                          '', --COLA_DESC_3
+                                          '', --COLA_DESC_4
+                                          '', --COLA_DESC_5
+                                          '', --COLA_DESC_6
+                                          '', --COLA_DESC_7
+                                          '', --COLA_DESC_8
+                                          '', --COLA_DESC_9
+                                          '', --COLA_DESC_10
+                                          '', --COLA_DESC_11
+                                          '', --COLA_DESC_12
+                                          '', --COLA_DESC_13
+                                          '', --COLA_DESC_14
+                                          '', --COLA_DESC_15
+                                          '', --COLA_DESC_16
+                                          '', --COLA_DESC_17
+                                          '', --COLA_DESC_18
+                                          '', --COLA_DESC_19
+                                          '', --COLA_DESC_20
+                                          SZLOGS,
+                                          '', --COLA_FISIK
+                                          'UPDATE SCRIPT',
+                                          '',
+                                          'IT HO');
+    EXCEPTION
+      WHEN OTHERS THEN
+        SZMSGERROR := 'ERROR INSERT TABLE COLA TRANSACT DETAIL SAVE' ||
+                      PK.COLA_ID || ' - ' || SQLERRM;
+        DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END;
+  
+    --insert transact header 
+    BEGIN
+      AD1CMS.PRC_COLA_INSERT_TRANS_HEADER(AD1CMS.LEFT(SZBRANLOC, 4),
+                                          SZMEMO,
+                                          TRUNC(SYSDATE),
+                                          SZMEMOTYPE,
+                                          '', --CUST_ID
+                                          '1', --COLL_UNITS
+                                          TRIM(SZREASON), --TRIM(SZRECVNAME),
+                                          '', --TRIM(SZRECVADDR),
+                                          '', --RECV_FROM_ADDR2
+                                          '', --TO_DATE(SZTURNDATE, 'dd-MM-yyyy'),
+                                          '', --REPL_BPKB_NO
+                                          '0', --COLA_CONFIRMED
+                                          SZLOGS, --SZLOGID, --REMARK BY ANDI 120820
+                                          '0', --COLA_DELETED
+                                          '', --COLA_MEMO_REF_DATE
+                                          '', --COLA_SURAT_JALAN
+                                          '', --SZPIHAK3, --COLA_SEND_TO
+                                          TRIM('CANCEL TERMNATION'), --COLA_ALASAN_CANCEL
+                                          '', --COLA_GEN_MEMO
+                                          SZBRANLOC, --COLA_BR_TRAN
+                                          '', --cola_alasan
+                                          'IT HO', --cola_addt_1
+                                          '', --COLA_ADDT_2
+                                          '', --COLA_ADDT_3
+                                          '', --COLA_ADDT_4
+                                          '' --COLA_ADDT_5
+                                          );
+    EXCEPTION
+      WHEN OTHERS THEN
+        SZMSGERROR := 'ERROR INSERT TABLE COLA TRANSACT HEADER SAVE ' ||
+                      PK.COLA_ID || ' - ' || SQLERRM;
+        DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END;
+    --end proses SAVE
+  
+    --proses confirm 
+    -- update MASTER --
+    BEGIN
+      UPDATE AD1CMS.COLA_MASTER_DATA CMD
+         SET CMD.COLA_STATUS   = SZSTAT,
+             CMD.COLA_LOCATION = SZLOC,
+             CMD.COLA_BRAN_LOC = SZBRANLOC,
+             CMD.COLA_UPDT_REASON = SZLOGS ||' '||'CANCEL RLT'
+       WHERE CMD.COLA_ID = PK.COLA_ID;
+    EXCEPTION
+      WHEN OTHERS THEN
+        SZMSGERROR := 'UPDATE COLA MASTER DATA COLL ID  : ' || PK.COLA_ID ||
+                      ' NO MEMO : ' || SZMEMO;
+        DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END;
+  
+    --GET MAX SEQUENCE HISTORY
+    BEGIN
+      SELECT MAX(CMH.COLA_SEQNO)
+        INTO SZCOLL_SEQ
+        FROM AD1CMS.COLA_MASTER_HISTORY CMH
+       WHERE CMH.COLA_ID = PK.COLA_ID;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        SZCOLL_SEQ := 0;
+    END;
+  
+    FOR DET_REG IN (SELECT *
+                      FROM AD1CMS.COLA_DETAIL_REG CDR
+                     WHERE CDR.COLA_ID = PK.COLA_ID
+                       AND CDR.COLA_ADDT_4 IS NOT NULL -- ADD BY ANDI 170920
+                    ) LOOP
+      BEGIN
+        -- insert history --
+        AD1CMS.PROC_CL_INSERT_HISTORY(DET_REG.COLA_BRID, --SZKODE_CABANG,
+                                      PK.COLA_ID,
+                                      DET_REG.COLA_CONT_NO, --null untuk saat ini
+                                      SZMEMOTYPE,
+                                      NVL(SZCOLL_SEQ, 0) + 1,
+                                      SZMEMO,
+                                      '',
+                                      TRUNC(SYSDATE),
+                                      SYSDATE,
+                                      SZSTAT,
+                                      SZLOC,
+                                      SZBRANLOC,
+                                      SZBRANLOC,
+                                      '',
+                                      SZLOGS,
+                                      DET_REG.COLA_CONT_STAT,
+                                      '',
+                                      '',
+                                      '',
+                                      '',
+                                      SZMSGERROR);
+      EXCEPTION
+        WHEN OTHERS THEN
+          SZMSGERROR := 'ERROR INSERT HISTORY COLL ID  : ' || PK.COLA_ID ||
+                        ' NO MEMO : ' || SZMEMO;
+          DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+      END;
+    
+      IF TRIM(SZMSGERROR) <> '' THEN
+        DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+      END IF;
+    END LOOP;
+    --end proses confirm
+  
+    --proses in laci 
+    IF AD1CMS.FUNC_GET_PARA_DOMAIN('MEM_TYP', SZMEMOTYPE, '', '2', '', '', 'IN') <> 'NO' THEN
+    
+      BEGIN
+      
+        AD1CMS.PRC_CL_CEK_SPARE_STROOM(SZBRANLOC,
+                                       SZMEMO,
+                                       SZMSGERROR,
+                                       SZCEKSTR);
+      EXCEPTION
+      
+        WHEN OTHERS THEN
+          SZMSGERROR := 'ERROR CEK STRONGROOM  : ' || PK.COLA_ID ||
+                        ' NO MEMO : ' || SZMEMO;
+          DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+      END;
+    
+    ELSIF AD1CMS.FUNC_GET_PARA_DOMAIN('MEM_TYP',
+                               SZMEMOTYPE,
+                               '',
+                               '2',
+                               '',
+                               '',
+                               'OUT') <> 'NO' THEN
+    
+      SZCEKSTR := 'OK';
+    
+    END IF;
+  
+    IF SZCEKSTR = 'OK' THEN
+      FOR Q IN (SELECT CDR.COLA_BRID,
+                       CTH.COLA_MEMO_NO,
+                       CTH.COLA_MEMO_TYPE,
+                       CTD.COLA_ID
+                  FROM AD1CMS.COLA_TRANSACT_HEADER CTH,
+                       AD1CMS.COLA_TRANSACT_DETAIL CTD,
+                       AD1CMS.COLA_DETAIL_REG      CDR
+                 WHERE CTH.COLA_MEMO_NO = CTD.COLA_MEMO_NO
+                   AND CTH.COLA_BR_ID = CTH.COLA_BR_ID
+                   AND CTD.COLA_ID = CDR.COLA_ID
+                   AND CTH.COLA_CONFIRMED = '0'
+                   AND CTH.COLA_MEMO_NO = SZMEMO
+                   AND CTH.COLA_BR_ID = AD1CMS.LEFT(SZBRANLOC, 4)
+                   AND CDR.COLA_ADDT_4 = '1') LOOP
+      
+        BEGIN
+          AD1CMS.PRC_CL_IN_OUT_STROOM(SZBRANLOC,
+                                      Q.COLA_MEMO_NO,
+                                      Q.COLA_MEMO_TYPE,
+                                      Q.COLA_BRID,
+                                      Q.COLA_ID,
+                                      SZRESPONSE,
+                                      SZMSGERROR,
+                                      SZLOC_COLLID);
+        EXCEPTION
+          WHEN OTHERS THEN
+            SZMSGERROR := 'ERROR UPDATE STRONGROOM  : ' || PK.COLA_ID ||
+                          ' NO MEMO : ' || SZMEMO;
+            DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+        END;
+      
+      END LOOP;
+    END IF;
+  
+    IF TRIM(SZMSGERROR) <> '' THEN
+      DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END IF;
+  
+    ---ADD BY ANDI 120920 pindah setelah proses strongroom
+    -- proses table transaction --
+    BEGIN
+      UPDATE AD1CMS.COLA_TRANSACT_HEADER CTH
+         SET CTH.COLA_CONFIRMED = 1
+       WHERE CTH.COLA_BR_ID = AD1CMS.LEFT(SZBRANLOC, 4) --SZKODE_CABANG
+         AND CTH.COLA_MEMO_NO = SZMEMO
+         AND CTH.COLA_MEMO_TYPE = SZMEMOTYPE;
+    EXCEPTION
+      WHEN OTHERS THEN
+        SZMSGERROR := 'ERROR UPDATE COLA TRANSACT HEADER NO MEMO : ' || SZMEMO;
+        DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END;
+    --end proses in laci
+  
+    IF TRIM(SZMSGERROR) <> '' THEN
+      DBMS_OUTPUT.PUT_LINE(SZMSGERROR);
+    END IF;
+    
+    DBMS_OUTPUT.PUT_LINE('INFO NOMOR MEMO '||SZMEMO);
+  
+  END LOOP;
+END;
+
+--cek hasil update
+\*
+SELECT * from AD1CMS.cola_master_data a WHERE a.cola_id = 'B240000107492';
+SELECT * from AD1CMS.cola_master_history a WHERE a.cola_id = 'B240000107492';
+
+SELECT * FROM AD1CMS.COLA_DETAIL_REG A WHERE A.COLA_ID = 'B220000287063';
+SELECT * FROM AD1CMS.COLA_TRANSACT_HEADER A WHERE A.COLA_MEMO_NO = '02112306L0000005066';
+SELECT * FROM AD1CMS.COLA_TRANSACT_DETAIL A WHERE A.COLA_MEMO_NO = '02112306L0000005066';
+SELECT * FROM AD1CMS.COLA_TRANSACT_DETAIL A WHERE A.COLA_ID = 'B220000287063';
+
+SELECT rowid, a.* FROM ad1cms.cola_detail_reg a
+where a.cola_cont_no = '010921112881';
+
+SELECT * FROM ad1cms.cola_master_data a
+where a.cola_id in ('B210002670247','         ');
+
+*/

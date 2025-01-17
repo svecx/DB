@@ -1,0 +1,49 @@
+/*
+SELECT TCA.APPL_CONTRACT_NO,
+       CDR.COLA_ID,
+       TCA.APPL_DESC_6,
+       CMD.COLA_DESC_6,
+       TCA.APPL_DESC_7,
+       CMD.COLA_DESC_7,
+       TCA.APPL_DESC_11,
+       CMD.COLA_DESC_10
+  FROM ad1cms.TEMP_COLLA_AUTOREGIS TCA
+  JOIN AD1CMS.COLA_DETAIL_REG CDR
+    ON CDR.COLA_CONT_NO = TCA.APPL_CONTRACT_NO
+  JOIN AD1CMS.COLA_MASTER_DATA CMD
+    ON CMD.COLA_ID = CDR.COLA_ID
+ WHERE TCA.APPL_CONTRACT_NO = '065724212110';
+*/
+
+/*
+ INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR - 42855', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_master_data', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '3', -- BATCH
+   'ARU',--EXECUTOR
+   'update data'--KETERANGAN
+   );
+*/
+
+--backup cmd
+select cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B240000934359'; -- 3 change
+ 
+update ad1cms.cola_master_data cmd
+   set cmd.cola_desc_6  = '474', -- 039
+       cmd.cola_desc_7  = '090', --  007
+       cmd.cola_desc_10 = '1W1'  --  1UP
+-- select cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B240000934359';
+
+-- after update
+select rowid, cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B240000934359';
+ 

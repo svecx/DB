@@ -1,0 +1,34 @@
+--09-10 
+
+ INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('SR38083', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_master_data', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '4', -- BATCH
+   'ARU',--EXECUTOR
+   'update data'--KETERANGAN
+   );
+   
+
+--backup cmd
+select cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B210003004967'; -- 3 change
+ 
+update ad1cms.cola_master_data cmd
+   set cmd.cola_desc_6  = '474',
+       cmd.cola_desc_7  = '008',
+       cmd.cola_desc_10 = '0W5'
+-- select cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B210003004967';
+
+-- after update
+select cmd.cola_desc_6, cmd.cola_desc_7 , cmd.cola_desc_10  from ad1cms.cola_master_data cmd
+ where cmd.COLA_ID = 'B210003004967';
+ 
+ 

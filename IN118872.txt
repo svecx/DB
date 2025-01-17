@@ -1,0 +1,14 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN118872', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'temp_colla_autoregis', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '3', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '2', -- BATCH
+   'ARU',--EXECUTOR
+   'update data'--KETERANGAN
+   );

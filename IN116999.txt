@@ -1,0 +1,33 @@
+  INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN116999', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'temp_colla_autoregis', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '2', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '2   ', -- BATCH
+   'ARU',--EXECUTOR
+   'update data'--KETERANGAN
+   );
+   
+
+  
+  update ad1cms.temp_colla_autoregis tca 
+  set  APPL_PPD_NO = '010024200339', APPL_PPD_DATE = TO_DATE('25/08/2024','DD/MM/YYYY')
+  -- SELECT * FROM ad1cms.temp_colla_autoregis tca
+   where tca.appl_contract_no in ('013624121244');
+  
+  SELECT rowid,
+         APPL_DATE_ADD,
+         APPL_PPD_NO,
+         APPL_PPD_DATE,
+         STATUS,
+         APPL_CONT_OLD,
+         SZTRANSAKSI,
+         APPL_DESC_15,
+         tca.*
+    FROM ad1cms.temp_colla_autoregis tca
+   where tca.appl_contract_no in ('013624121244');

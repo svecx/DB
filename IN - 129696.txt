@@ -1,0 +1,41 @@
+--20-09 
+
+ INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('IN - 129696', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'temp_colla_autoregis', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '2', -- BATCH
+   'ARU',--EXECUTOR
+   'update data'--KETERANGAN
+   );
+   
+
+-- APABILA TANGGAL SUDAH LEBIH 1 BLN
+  update ad1cms.temp_colla_autoregis tca
+     set APPL_DATE_ADD = TRUNC(SYSDATE),
+         APPL_PPD_NO   = '110024055890',
+         APPL_PPD_DATE = TO_DATE('25/08/2024', 'DD/MM/YYYY'),
+         STATUS = '0',
+         SZTRANSAKSI = '7'
+  -- SELECT APPL_DATE_ADD,APPL_PPD_NO, APPL_PPD_DATE, STATUS, APPL_CONT_OLD, SZTRANSAKSI  FROM ad1cms.temp_colla_autoregis tca
+   where tca.appl_contract_no in ('061824112400');
+   
+  /*
+  SELECT rowid,
+         APPL_DATE_ADD,
+         APPL_PPD_NO,
+         APPL_PPD_DATE,
+         STATUS,
+         APPL_CONT_OLD,
+         SZTRANSAKSI,
+         APPL_DESC_15,
+         tca.*
+    FROM ad1cms.temp_colla_autoregis tca
+   where tca.appl_contract_no in ('013624121244');
+*/

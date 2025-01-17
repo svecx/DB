@@ -1,0 +1,107 @@
+SELECT AREC_RESCHD_TYPE FROM AD1SYS.AREC_CONT_RESCHD a
+where a.AREC_NEW_CONT_NO = '081019213616' and arec_memo_no = '040821ST00TH';
+
+SELECT * FROM AD1SYS.AREC_CONT_RESCHD a
+where a.AREC_NEW_CONT_NO = '081019213616';
+-- cek biaya asuransi
+SELECT * FROM ad1sys.acct_deposit ad where ad.depo_ref_no in ('081019213616')
+
+-- cek ppd
+select * from ad1sys.cred_appl a where a.appl_contract_no = '031324110563'
+
+-- cek biaya simpan
+select * from ad1sys.arec_biaya_bpkb a where a.arec_cont_no = '081019213616'
+
+select * from ad1sys.arec_bpkb a where a.arec_cont_no = '081019213616 '
+-- ref cek 
+
+SELECT * FROM ad1sys.acct_flag_pembayaran afp where afp.acct_contract_no = '';
+--  cancel ppd
+SELECT * FROM 
+ad1sys.arec_cont_correction a
+where a.arec_cont_no = '081019213616';
+
+SELECT * FROM        
+ad1sys.arec_cont_schd acs where acs.arec_cont_no = '081019213616';
+
+SELECT * FROM         
+ad1sys.arec_cont_mast acm where acm.arec_cont_no = '081019213616';
+
+
+/*
+update ad1sys.acct_deposit ad 
+set depo_initial_bal = '0' -- 5000
+-- SELECT * FROM ad1sys.acct_deposit ad 
+where ad.depo_ref_no = '081019213616'
+and depo_trans_Code = 'PPA19' ;
+*/
+
+
+-- cek deposit
+SELECT * FROM AD1SYS.AREC_CONT_SCHD a
+where a.AREC_CONT_NO = '081019213616';
+
+select rowid, acm.* from ad1sys.arec_cont_mast acm where acm.arec_cont_no = '081019213616';
+
+select rowid, ad.* from ad1sys.acct_deposit ad where ad.depo_ref_no = '081019213616';
+
+SELECT * FROM ad1sys.acct_deposit_history a where --a.depo_doc_no = '060724R016880'-- and 
+a.depo_from_ref_no = '081019213616'
+ and a.depo_class_code = 'PPA19';
+
+-- biaya simpan
+  SELECT * FROM ad1sys.arec_cont_mast a
+  where a.arec_Cont_no = '081019213616';
+
+  SELECT * FROM ad1sys.acct_deposit aa
+  where aa.depo_ref_no = '081019213616';
+
+  SELECT * FROM ad1sys.arec_biaya_bpkb a
+  where a.arec_cont_no = '081019213616';
+/*
+50764368,00000
+50677148,00000*/
+-- cek pk wo 
+SELECT * FROM ad1sys.arec_unit_repo_wo aurw where aurw.arec_cont_no = '081019213616';
+
+SELECT * FROM ad1sys.arec_unit_repo aur  where aur.arec_cont_no = '081019213616'; -- arec_pickup_no 
+
+--termina 0 wo
+SELECT X.CASH_CONTRACT_NO, X.AMT_BAYAR, C.AREC_AMOUNT_PELUNASAN
+      FROM (SELECT A.CASH_CONTRACT_NO,
+                   A.CASH_BRID_CUST,
+                   SUM(A.CASH_RCVD_AMT) AMT_BAYAR
+              FROM CASH_RV_DETAIL A, CASH_RV_HEADER B
+             WHERE A.CASH_CONTRACT_NO = A.CASH_CONTRACT_NO
+               AND A.CASH_CLAS_CODE = 'T-P.WO.THP'
+               AND A.CASH_BR_ID = B.CASH_BR_ID
+               AND A.CASH_RV_NO = B.CASH_RV_NO
+               AND B.CASH_STATUS = '1'
+             GROUP BY A.CASH_CONTRACT_NO, A.CASH_BRID_CUST) X,
+           AD1SYS.AREC_WORKFLOW_WO C
+     WHERE C.AREC_CONT_NO = '081019213616'
+       AND C.AREC_BR_ID = X.CASH_BRID_CUST
+       AND C.AREC_CONT_NO = X.CASH_CONTRACT_NO
+       AND C.AREC_WORKFLOW_FLAG = 'L'
+       AND C.AREC_WORKFLOW_STATUS = 'A';
+
+/*
+15000000
+15000000,00000
+
+UPDATE AD1SYS.AREC_UNIT_REPO_WO A
+   SET A.AREC_SOLD_STATUS = 'T', A.AREC_TERMINATE_DATE = TRUNC(SYSDATE)
+--SELECT * FROM AD1SYS.AREC_UNIT_REPO_WO A
+ WHERE A.AREC_CONT_NO = '081019213616'
+   AND A.AREC_SOLD_STATUS = '0';
+*/
+
+
+
+
+-- cek atas status apakah D / (T/W) unit repo - repo wo
+-- apabila  dia sudah melakukan pembayaran maka kita update menjadi menjadi (T/W)
+-- jika D maka kita update menjadi D
+
+
+SELECT * FROM ad1sys.arec_workflow_wo aw where aw.arec_pickup_no = '081019213616';

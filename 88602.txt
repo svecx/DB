@@ -1,0 +1,48 @@
+SELECT * FROM dbo.udt_WF4DOC_Header WHERE RequestNo IN ('006923/PPYM/VII/2024') 
+SELECT * FROM Ad14flow..udt_WF4DOC_CurrApproval WHERE AppHeaderID IN('2888922') -- AppHeaderID
+SELECT * FROM Ad14flow..udt_WF4DOC_Approval WHERE AppHeaderID IN ('2888922') order BY ApprovalID DESC -- AppHeaderID
+SELECT TOP 100 * FROM HRData..ADF_Employee WHERE SAPObjectAlias IN ('10005157') --- HRDATA
+--SELECT * FROM Ad14flow..udt_WF4DSN_Job ORDER BY JobID ----modul liat dari tabel jobid
+
+
+		
+BEGIN TRAN --COMMIT --ROLLBACK
+
+INSERT INTO [Data_Archive_New].[dbo].[LOG_PATCHING]
+        SELECT 'IN 88602','51211457 - SK','Proposal Penyimpangan','udt_WF4DOC_CurrApproval','1','0','0',GETDATE(),'2'
+
+INSERT INTO Ad14flow..udt_WF4DOC_CurrApproval
+        ( AppHeaderID ,
+          ApprovalID ,
+          Label ,
+          Activity ,
+          Person ,
+          PersonName ,
+          Role ,
+          RoleName ,
+          Location ,
+          DateIn ,
+          DateNotice ,
+          DateOut ,
+          ApprovalType ,
+          ActivityOwner ,
+          ClaimApproval ,
+          Isactive
+        )
+VALUES  ( 2888922, -- AppHeaderID - int
+          0 , -- ApprovalID - int
+          'APPR_HEAD' , -- Label - varchar(12)
+          'Menunggu Persetujuan Atasan' , -- Activity - varchar(230)
+          '10005157' , -- Person - varchar(50) --SAPObjectAlias
+          'Rio Widisaroyo' , -- PersonName - varchar(130) --Fullname
+          'Rio Widisaroyo(10005157)' , -- Role - varchar(50)
+          NULL , -- RoleName - varchar(130)
+          '*' , -- Location - varchar(50)
+          GETDATE() , -- DateIn - datetime
+          NULL , -- DateNotice - datetime
+          NULL , -- DateOut - datetime
+          0 , -- ApprovalType - int
+          NULL , -- ActivityOwner - varchar(12)
+          1 , -- ClaimApproval - int
+          1  -- Isactive - bit
+        )

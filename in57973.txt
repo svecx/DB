@@ -1,0 +1,21 @@
+INSERT INTO IT_OPR1_AOL.EXEC_LOGS_AOL
+    VALUES
+  ('in57973', -- TICKET
+   'SK - 51211457', -- NIK
+   'AD1CMS', -- MODUL
+   'cola_master_data', -- NAMA TABEL
+   '0', -- ROW INSERT
+   '1', -- ROW UPDATE
+   '0', -- ROW DELETE
+   TRUNC(SYSDATE),
+   '5', -- BATCH
+   'ARU',--EXECUTOR
+   'Bpkb tidak bisa di outkan padahal BPkb sudah preterm'--KETERANGAN
+   );
+
+UPDATE 
+-- SELECT rowid, cmd.* FROM 
+ad1cms.cola_master_data cmd 
+--SET COLA_ADDT_1 = 'BD22921'
+where cmd.cola_Id = 'B240000056884'; -- borow cola_addt_2
+
